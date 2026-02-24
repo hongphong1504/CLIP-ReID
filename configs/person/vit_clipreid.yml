@@ -41,7 +41,7 @@ SOLVER:
     WARMUP_EPOCHS: 5
   
   STAGE2:
-    IMS_PER_BATCH: 8
+    IMS_PER_BATCH: 64
     OPTIMIZER_NAME: "Adam"
     BASE_LR: 0.000003
     WARMUP_METHOD: 'linear'
@@ -61,7 +61,7 @@ SOLVER:
   
 TEST:
   EVAL: True
-  IMS_PER_BATCH: 8
+  IMS_PER_BATCH: 64
   RE_RANKING: False
   WEIGHT: ''
   NECK_FEAT: 'before'
@@ -84,6 +84,6 @@ DATASETS:
 #   ROOT_DIR: ('')
 # OUTPUT_DIR: ''
   NAMES: ('agreidv2')
-  ROOT_DIR: ('/home/phong1504/CLIP-ReID/datasets')
+  ROOT_DIR: ('/kaggle/working/CLIP-ReID/datasets')
 OUTPUT_DIR: logs/ViT_clipreid_agreidv2
 # CUDA_VISIBLE_DEVICES=3 python train_clipreid.py --config_file configs/person/vit_clipreid.yml
