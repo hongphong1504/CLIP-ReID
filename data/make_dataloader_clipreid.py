@@ -3,6 +3,7 @@ import torchvision.transforms as T
 from torch.utils.data import DataLoader
 
 from .bases import ImageDataset
+import torch.fx
 from timm.data.random_erasing import RandomErasing
 from .sampler import RandomIdentitySampler
 from .dukemtmcreid import DukeMTMCreID
@@ -13,6 +14,7 @@ import torch.distributed as dist
 from .occ_duke import OCC_DukeMTMCreID
 from .vehicleid import VehicleID
 from .veri import VeRi
+from .agreidv2 import AG_ReID_v2
 
 __factory = {
     'market1501': Market1501,
@@ -20,7 +22,8 @@ __factory = {
     'msmt17': MSMT17,
     'occ_duke': OCC_DukeMTMCreID,
     'veri': VeRi,
-    'VehicleID': VehicleID
+    'VehicleID': VehicleID,
+    'agreidv2': AG_ReID_v2,
 }
 
 def train_collate_fn(batch):
