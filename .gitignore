@@ -10,3 +10,7 @@
 /data/__pycache__
 /datasets
 /logs
+/slurm-logs
+/caption
+test_clipreid.sh
+train_clipreid.sh
