@@ -68,7 +68,7 @@ def do_train(cfg,
                 target_view = target_view.to(device)
             else: 
                 target_view = None
-            with amp.autocast(enabled=False):
+            with amp.autocast(enabled=True):
                 score, feat = model(img, target, cam_label=target_cam, view_label=target_view)
                 loss = loss_fn(score, feat, target, target_cam)
 
