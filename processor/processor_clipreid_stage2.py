@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import time
@@ -5,7 +6,7 @@ import torch
 import torch.nn as nn
 from utils.meter import AverageMeter
 from utils.metrics import R1_mAP_eval
-from torch.cuda import amp
+from torch import amp
 import torch.distributed as dist
 from torch.nn import functional as F
 from loss.supcontrast import SupConLoss
@@ -44,7 +45,7 @@ def do_train_stage2(cfg,
     acc_meter = AverageMeter()
 
     evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)
-    scaler = amp.GradScaler()
+    scaler = amp.GradScaler('cuda')
     xent = SupConLoss(device)
     
     # train
@@ -53,22 +54,30 @@ def do_train_stage2(cfg,
     all_start_time = time.monotonic()
 
     # train
-    batch = cfg.SOLVER.STAGE2.IMS_PER_BATCH
-    i_ter = num_classes // batch
-    left = num_classes-batch* (num_classes//batch)
-    if left != 0 :
-        i_ter = i_ter+1
-    text_features = []
-    with torch.no_grad():
-        for i in range(i_ter):
-            if i+1 != i_ter:
-                l_list = torch.arange(i*batch, (i+1)* batch)
-            else:
-                l_list = torch.arange(i*batch, num_classes)
-            with amp.autocast(enabled=False):
-                text_feature = model(label = l_list, get_text = True)
-            text_features.append(text_feature.cpu())
-        text_features = torch.cat(text_features, 0).cuda()
+
+    # batch = cfg.SOLVER.STAGE2.IMS_PER_BATCH
+    # i_ter = num_classes // batch
+    # left = num_classes-batch* (num_classes//batch)
+    # if left != 0 :
+    #     i_ter = i_ter+1
+    # text_features = []
+    # with torch.no_grad():
+    #     for i in range(i_ter):
+    #         if i+1 != i_ter:
+    #             l_list = torch.arange(i*batch, (i+1)* batch)
+    #         else:
+    #             l_list = torch.arange(i*batch, num_classes)
+    #         with amp.autocast(enabled=True):
+    #             text_feature = model(label = l_list, get_text = True)
+    #         text_features.append(text_feature.cpu())
+    #     text_features = torch.cat(text_features, 0).cuda()
+
+    with open("caption/captions_all_BLIP_finetuned.json", "r") as f:
+        captions_all = json.load(f)
+    
+    caption_dict = {
+        item['image_path'] : item['caption'] for item in captions_all if item['status'] == "ok"
+    }
 
     for epoch in range(1, epochs + 1):
         start_time = time.time()
@@ -79,7 +88,7 @@ def do_train_stage2(cfg,
         scheduler.step()
 
         model.train()
-        for n_iter, (img, vid, target_cam, target_view) in enumerate(train_loader_stage2):
+        for n_iter, (img, vid, target_cam, target_view, img_path) in enumerate(train_loader_stage2):
             optimizer.zero_grad()
             optimizer_center.zero_grad()
             img = img.to(device)
@@ -92,8 +101,15 @@ def do_train_stage2(cfg,
                 target_view = target_view.to(device)
             else: 
                 target_view = None
-            with amp.autocast(enabled=False):
-                score, feat, image_features = model(x = img, label = target, cam_label=target_cam, view_label=target_view)
+
+            # Calculate text features from image caption
+
+            captions = [caption_dict[p] for p in img_path]
+            with torch.no_grad():
+                text_features = model(caption = captions, get_text = True)
+            
+            with amp.autocast('cuda', enabled=True):
+                score, feat, image_features = model(x = img, cam_label=target_cam, view_label=target_view)
                 logits = image_features @ text_features.t()
                 loss = loss_fn(score, feat, target, target_cam, logits)
 
@@ -176,9 +192,9 @@ def do_train_stage2(cfg,
                         evaluator.update((feat, vid, camid))
                 cmc, mAP, _, _, _, _, _ = evaluator.compute()
                 logger.info("Validation Results - Epoch: {}".format(epoch))
-                logger.info("mAP: {:.1%}".format(mAP))
+                logger.info("mAP: {:.2%}".format(mAP))
                 for r in [1, 5, 10]:
-                    logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+                    logger.info("CMC curve, Rank-{:<3}:{:.2%}".format(r, cmc[r - 1]))
                 torch.cuda.empty_cache()
 
     all_end_time = time.monotonic()
@@ -225,7 +241,7 @@ def do_inference(cfg,
 
     cmc, mAP, _, _, _, _, _ = evaluator.compute()
     logger.info("Validation Results ")
-    logger.info("mAP: {:.1%}".format(mAP))
+    logger.info("mAP: {:.2%}".format(mAP))
     for r in [1, 5, 10]:
-        logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+        logger.info("CMC curve, Rank-{:<3}:{:.2%}".format(r, cmc[r - 1]))
     return cmc[0], cmc[4]

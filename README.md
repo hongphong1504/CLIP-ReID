@@ -8,16 +8,25 @@
 ### Installation
 
 ```
-# Setting for training on L40
-conda create -n clipreid python=3.8
-conda activate clipreid
+# Setting for training on L40, python 3.10
+conda create -n clip-reid python=3.10
+conda activate clip-reid
 pip install torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu128
-pip install yacs
-pip install timm
-pip install scikit-image
-pip install tqdm
-pip install ftfy
-pip install regex
+pip install -r requirements.txt
+
+# Setting for training on L40, python 3.8
+conda create -n clip-reid-py38 python=3.8
+conda activate clip-reid-py38
+conda install pytorch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 pytorch-cuda=12.1 -c pytorch -c nvidia
+pip install -r requirements.txt
+
+# Setting for training on L40, branch: my-clipreid(BLIP)
+conda create -n my-clipreid python=3.10
+conda activate my-clipreid
+pip install torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu128
+pip install -r requirements.txt
+pip install salesforce-lavis
+pip install "numpy<2"
 ```
 
 ### Prepare Dataset
