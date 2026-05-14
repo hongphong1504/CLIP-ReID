@@ -8,16 +8,11 @@
 ### Installation
 
 ```
-conda create -n clipreid python=3.8
-conda activate clipreid
-<!-- conda install pytorch==1.8.0 torchvision==0.9.0 torchaudio==0.8.0 cudatoolkit=10.2 -c pytorch -->
-conda install pytorch=1.8.0 torchvision=0.9.0 torchaudio=0.8.0 cudatoolkit=10.2 -c pytorch -c defaults
-pip install yacs
-pip install timm
-pip install scikit-image
-pip install tqdm
-pip install ftfy
-pip install regex
+# Setting for training on L40, python 3.10
+conda create -n clip-reid python=3.10
+conda activate clip-reid
+pip install torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu128
+pip install -r requirements.txt
 ```
 
 ### Prepare Dataset
