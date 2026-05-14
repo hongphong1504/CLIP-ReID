@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 from .clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 _tokenizer = _Tokenizer()
-from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+from timm.layers import DropPath, to_2tuple, trunc_normal_
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
@@ -90,15 +90,18 @@ class build_transformer(nn.Module):
         if cfg.MODEL.SIE_CAMERA and cfg.MODEL.SIE_VIEW:
             self.cv_embed = nn.Parameter(torch.zeros(camera_num * view_num, self.in_planes))
             trunc_normal_(self.cv_embed, std=.02)
-            print('camera number is : {}'.format(camera_num))
+            print('camera number is : {} and viewpoint number is : {}'.format(camera_num, view_num))
+            print('using SIE_Lambda is : {}'.format(self.sie_coe))
         elif cfg.MODEL.SIE_CAMERA:
             self.cv_embed = nn.Parameter(torch.zeros(camera_num, self.in_planes))
             trunc_normal_(self.cv_embed, std=.02)
             print('camera number is : {}'.format(camera_num))
+            print('using SIE_Lambda is : {}'.format(self.sie_coe))
         elif cfg.MODEL.SIE_VIEW:
             self.cv_embed = nn.Parameter(torch.zeros(view_num, self.in_planes))
             trunc_normal_(self.cv_embed, std=.02)
-            print('camera number is : {}'.format(view_num))
+            print('viewpoint number is : {}'.format(view_num))
+            print('using SIE_Lambda is : {}'.format(self.sie_coe))
 
         dataset_name = cfg.DATASETS.NAMES
         self.prompt_learner = PromptLearner(num_classes, dataset_name, clip_model.dtype, clip_model.token_embedding)

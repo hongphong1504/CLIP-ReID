@@ -14,7 +14,7 @@ import torch.distributed as dist
 from .occ_duke import OCC_DukeMTMCreID
 from .vehicleid import VehicleID
 from .veri import VeRi
-from .agreidv2 import AG_ReID_v2
+from .agreidv2 import AG_ReID_v2, AG_ReID_v2_G2A, AG_ReID_v2_A2W, AG_ReID_v2_W2A
 
 __factory = {
     'market1501': Market1501,
@@ -24,6 +24,9 @@ __factory = {
     'veri': VeRi,
     'VehicleID': VehicleID,
     'agreidv2': AG_ReID_v2,
+    'agreidv2_g2a': AG_ReID_v2_G2A,
+    'agreidv2_a2w': AG_ReID_v2_A2W,
+    'agreidv2_w2a': AG_ReID_v2_W2A,
 }
 
 def train_collate_fn(batch):

@@ -37,6 +37,7 @@ class AG_ReID_v2(BaseImageDataset):
         #     self.qut_attribute_path
         # ]
         self._check_before_run()
+        
         self.pid_begin = pid_begin
 
         train = self._process_dir(self.train_dir, relabel=True)
@@ -184,8 +185,7 @@ class AG_ReID_v2(BaseImageDataset):
             
 class AG_ReID_v2_G2A(BaseImageDataset):
 
-    def __init__(self, root='datasets',
-                 verbose=True, **kwargs):
+    def __init__(self, root='datasets', verbose=True, pid_begin = 0, **kwargs):
         super(AG_ReID_v2_G2A, self).__init__()
         self.dataset_dir = root
         self.data_dir = self.dataset_dir
@@ -212,7 +212,9 @@ class AG_ReID_v2_G2A(BaseImageDataset):
         # ]
         self._check_before_run()
 
-        train = self._process_dir(self.train_dir, is_train=True)
+        self.pid_begin = pid_begin
+
+        train = self._process_dir(self.train_dir, relabel=True)
         query, gallery = self.process_setting_txt(osp.join(self.data_dir, 'AG-ReID.v2'),self.setting_text)
         # query = self._process_dir(self.query_dir, is_train=False)
         # gallery = self._process_dir(self.gallery_dir, is_train=False)
@@ -357,8 +359,7 @@ class AG_ReID_v2_G2A(BaseImageDataset):
 
 class AG_ReID_v2_A2W(BaseImageDataset):
 
-    def __init__(self, root='datasets',
-                 verbose=True, **kwargs):
+    def __init__(self, root='datasets', verbose=True, pid_begin = 0, **kwargs):
         super(AG_ReID_v2_A2W, self).__init__()
         self.dataset_dir = root
         self.data_dir = self.dataset_dir
@@ -385,7 +386,9 @@ class AG_ReID_v2_A2W(BaseImageDataset):
         # ]
         self._check_before_run()
 
-        train = self._process_dir(self.train_dir, is_train=True)
+        self.pid_begin = pid_begin
+
+        train = self._process_dir(self.train_dir, relabel=True)
         query, gallery = self.process_setting_txt(osp.join(self.data_dir, 'AG-ReID.v2'),self.setting_text)
         # query = self._process_dir(self.query_dir, is_train=False)
         # gallery = self._process_dir(self.gallery_dir, is_train=False)
@@ -531,8 +534,7 @@ class AG_ReID_v2_A2W(BaseImageDataset):
 
 class AG_ReID_v2_W2A(BaseImageDataset):
 
-    def __init__(self, root='datasets',
-                 verbose=True, **kwargs):
+    def __init__(self, root='datasets', verbose=True, pid_begin = 0, **kwargs):
         super(AG_ReID_v2_W2A, self).__init__()
         self.dataset_dir = root
         self.data_dir = self.dataset_dir
@@ -558,8 +560,10 @@ class AG_ReID_v2_W2A(BaseImageDataset):
         #     self.qut_attribute_path
         # ]
         self._check_before_run()
+        
+        self.pid_begin = pid_begin
 
-        train = self._process_dir(self.train_dir, is_train=True)
+        train = self._process_dir(self.train_dir, relabel=True)
         query, gallery = self.process_setting_txt(osp.join(self.data_dir, 'AG-ReID.v2'),self.setting_text)
         # query = self._process_dir(self.query_dir, is_train=False)
         # gallery = self._process_dir(self.gallery_dir, is_train=False)
