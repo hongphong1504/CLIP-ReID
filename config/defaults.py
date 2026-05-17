@@ -217,8 +217,12 @@ _C.SOLVER.STAGE2.EVAL_PERIOD = 10
 _C.TEST = CN()
 # Number of images per batch during test
 _C.TEST.IMS_PER_BATCH = 128
-# If test with re-ranking, options: 'True','False'
-_C.TEST.RE_RANKING = False
+# Test method: ['baseline', 'rerank', 'uffm', 'uffm_amc']
+_C.TEST.METHOD = 'baseline' 
+# Number of nearest neighbors for UFFM
+_C.TEST.UFFM_K = 5
+# Number of triplets for calculating AMC weights
+_C.TEST.AMC_N_TRIPLETS = 1000
 # Path to trained model
 _C.TEST.WEIGHT = ""
 # Which feature of BNNeck to be used for test, before or after BNNneck, options: 'before' or 'after'

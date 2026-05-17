@@ -9,6 +9,8 @@ import collections
 from torch.nn import functional as F
 from loss.supcontrast import SupConLoss
 
+logger = logging.getLogger("transreid.train")
+
 def do_train_stage1(cfg,
              model,
              train_loader_stage1,
@@ -20,8 +22,7 @@ def do_train_stage1(cfg,
     epochs = cfg.SOLVER.STAGE1.MAX_EPOCHS
     log_period = cfg.SOLVER.STAGE1.LOG_PERIOD 
 
-    logger = logging.getLogger("transreid.train")
-    logger.info('start training')
+    logger.info("Start Stage1 Training")
     _LOCAL_PROCESS_GROUP = None
     if device:
         model.to(local_rank)
