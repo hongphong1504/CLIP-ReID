@@ -88,7 +88,7 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
 
 
 class R1_mAP_eval():
-    def __init__(self, num_query, max_rank=50, feat_norm=True, reranking=False):
+    def __init__(self, num_query, max_rank=50, feat_norm='yes', reranking=False):
         super(R1_mAP_eval, self).__init__()
         self.num_query = num_query
         self.max_rank = max_rank
@@ -108,7 +108,7 @@ class R1_mAP_eval():
 
     def compute(self):  # called after each epoch
         feats = torch.cat(self.feats, dim=0)
-        if self.feat_norm:
+        if self.feat_norm == 'yes':
             print("The test feature is normalized")
             feats = torch.nn.functional.normalize(feats, dim=1, p=2)  # along channel
         # query

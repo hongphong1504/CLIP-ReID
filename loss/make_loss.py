@@ -34,7 +34,7 @@ def make_loss(cfg, num_classes):    # modified by gu
             return F.cross_entropy(score, target)
 
     elif cfg.DATALOADER.SAMPLER == 'softmax_triplet':
-        def loss_func(score, feat, target, target_cam, i2tscore = None):
+        def loss_func(score, feat, target, target_cam):
             if cfg.MODEL.METRIC_LOSS_TYPE == 'triplet':
                 if cfg.MODEL.IF_LABELSMOOTH == 'on':
                     if isinstance(score, list):
@@ -50,11 +50,6 @@ def make_loss(cfg, num_classes):    # modified by gu
                         TRI_LOSS = triplet(feat, target)[0]
                     
                     loss = cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
-
-                    if i2tscore != None:
-                        ground_truth = torch.arange(len(i2tscore)).to(target.device)
-                        I2TLOSS = xent(i2tscore, ground_truth)
-                        loss = cfg.MODEL.I2T_LOSS_WEIGHT * I2TLOSS + loss
 
                     return loss
                 else:
@@ -72,12 +67,6 @@ def make_loss(cfg, num_classes):    # modified by gu
 
                     loss = cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
                     
-                    if i2tscore != None:
-                        ground_truth = torch.arange(len(i2tscore)).to(target.device)
-                        I2TLOSS = F.cross_entropy(i2tscore, ground_truth)
-                        loss = cfg.MODEL.I2T_LOSS_WEIGHT * I2TLOSS + loss
-
-
                     return loss
             else:
                 print('expected METRIC_LOSS_TYPE should be triplet'

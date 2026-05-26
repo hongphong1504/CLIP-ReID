@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import math
+
 from .clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 _tokenizer = _Tokenizer()
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_   
@@ -49,9 +51,126 @@ class TextEncoder(nn.Module):
 
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
-        x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection 
+        x_before = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] 
+        x_after = x_before @ self.text_projection
+        return x_before, x_after
 
-        return x
+class SFM(nn.Module):
+    def __init__(self,
+                 vision_dim=768,
+                 text_dim=512,
+                 attn_dim=512,
+                 reduction=4):
+        super(SFM, self).__init__()
+        # Cross-modal attention
+        self.text_proj = nn.Linear(text_dim, attn_dim)
+        self.norm = nn.LayerNorm(vision_dim)
+        self.image_proj = nn.Linear(vision_dim, attn_dim)
+        self.attn_bias = nn.Parameter(torch.zeros(1))
+
+        self.text_proj.apply(weights_init_kaiming)
+        self.image_proj.apply(weights_init_kaiming)
+
+        # Dynamic channel weighting
+        hidden_dim = vision_dim // reduction
+        self.channel_mlp = nn.Sequential(
+            nn.Linear(text_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, vision_dim),
+            nn.Sigmoid()
+        )
+
+        self.channel_mlp.apply(weights_init_kaiming)
+
+        # Final refinement FC
+        self.refine_fc = nn.Linear(vision_dim, vision_dim)
+        self.refine_fc.apply(weights_init_kaiming)
+
+        self.out_norm = nn.LayerNorm(vision_dim)
+
+    def forward(self, image_feat, text_feat):
+        """
+        image_feat: (B, N, Dv)
+        text_feat: (B, Dt)
+        """
+        dtype = image_feat.dtype
+        text_feat = text_feat.to(dtype)
+
+        B, N, Dv = image_feat.shape
+
+        # Separate cls token and patch tokens
+        cls_token = image_feat[:, :1]       # (B,1,Dv)
+        patch_feat = image_feat[:, 1:]      # (B,N-1,Dv)
+
+        # Query from text
+        Q = self.text_proj(text_feat).type(dtype)           # (B,Da)
+        Q = Q.unsqueeze(1)                      # (B,1,Da)
+
+        # Key from image patches
+        patch_norm = self.norm(patch_feat)
+        K = self.image_proj(patch_norm)         # (B,Np,Da)
+
+        # Cross-modal attention
+        attn = torch.matmul(Q, K.transpose(-1, -2)) # (B,1,Np)
+        attn = attn / math.sqrt(K.shape[-1])
+        attn = attn + self.attn_bias
+        A = torch.sigmoid(attn)                 # (B,1,Np)
+
+        # Gated image representation
+        A_t = A.transpose(1, 2)                 # (B,Np,1)
+        X_gated = patch_feat * A_t              # (B,Np,Dv)
+
+        # Dynamic channel weighting
+        w_c = self.channel_mlp(text_feat)       # (B,Dv)
+        w_c = w_c.unsqueeze(1)                  # (B,1,Dv)
+        channel_refined = X_gated * w_c         # (B,Np,Dv)
+        channel_refined = self.refine_fc(channel_refined)
+
+        # Final output
+        X_sfm = X_gated + channel_refined
+    
+        # Re-attach cls token
+        out = torch.cat([cls_token, X_sfm], dim=1)
+
+        out = self.out_norm(out)
+
+        return out
+
+class ImageEncoder(nn.Module):
+    def __init__(self, clip_visual):
+        super().__init__()
+        self.visual = clip_visual
+        self.sfm = SFM(attn_dim=512, reduction=4) # mặc định đang là VIT-B16, chưa cài đặt cho kiến trúc khác
+
+    def forward(self, image, text, cv_emb=None):
+        x = self.visual.conv1(image) 
+        x = x.reshape(x.shape[0], x.shape[1], -1)
+        x = x.permute(0, 2, 1)
+        x = torch.cat([self.visual.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)
+
+        if cv_emb is not None:
+            x[:,0] = x[:,0] + cv_emb
+
+        x = x + self.visual.positional_embedding.to(x.dtype)
+        x = self.visual.ln_pre(x)
+
+        x = x.permute(1, 0, 2)
+
+        x11 = self.visual.transformer.resblocks[:11](x)
+
+        x11 = x11.permute(1, 0, 2)
+        x11 = self.sfm(x11, text)
+        x11 = x11.permute(1, 0, 2)
+
+        x12 = self.visual.transformer.resblocks[11](x11) 
+
+        x11 = x11.permute(1, 0, 2)  # LND -> NLD  
+        x12 = x12.permute(1, 0, 2)  # LND -> NLD  
+
+        x12 = self.visual.ln_post(x12)  
+
+        return x11, x12 
+        
 
 class build_transformer(nn.Module):
     def __init__(self, num_classes, camera_num, view_num, cfg):
@@ -73,15 +192,10 @@ class build_transformer(nn.Module):
 
         self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
         self.classifier.apply(weights_init_classifier)
-        self.classifier_proj = nn.Linear(self.in_planes_proj, self.num_classes, bias=False)
-        self.classifier_proj.apply(weights_init_classifier)
 
         self.bottleneck = nn.BatchNorm1d(self.in_planes)
         self.bottleneck.bias.requires_grad_(False)
         self.bottleneck.apply(weights_init_kaiming)
-        self.bottleneck_proj = nn.BatchNorm1d(self.in_planes_proj)
-        self.bottleneck_proj.bias.requires_grad_(False)
-        self.bottleneck_proj.apply(weights_init_kaiming)
 
         self.h_resolution = int((cfg.INPUT.SIZE_TRAIN[0]-16)//cfg.MODEL.STRIDE_SIZE[0] + 1)
         self.w_resolution = int((cfg.INPUT.SIZE_TRAIN[1]-16)//cfg.MODEL.STRIDE_SIZE[1] + 1)
@@ -89,64 +203,58 @@ class build_transformer(nn.Module):
         clip_model = load_clip_to_cpu(self.model_name, self.h_resolution, self.w_resolution, self.vision_stride_size)
         clip_model.to("cuda")
 
-        self.image_encoder = clip_model.visual
+        self.image_encoder = ImageEncoder(clip_model.visual)
+        self.text_encoder = TextEncoder(clip_model)
 
         if cfg.MODEL.SIE_CAMERA and cfg.MODEL.SIE_VIEW:
             self.cv_embed = nn.Parameter(torch.zeros(camera_num * view_num, self.in_planes))
             trunc_normal_(self.cv_embed, std=.02)
-            print('camera number is : {}'.format(camera_num))
+            print('camera number is : {} and viewpoint number is : {}'.format(camera_num, view_num))
+            print('using SIE_Lambda is : {}'.format(self.sie_coe))
         elif cfg.MODEL.SIE_CAMERA:
             self.cv_embed = nn.Parameter(torch.zeros(camera_num, self.in_planes))
             trunc_normal_(self.cv_embed, std=.02)
             print('camera number is : {}'.format(camera_num))
+            print('using SIE_Lambda is : {}'.format(self.sie_coe))
         elif cfg.MODEL.SIE_VIEW:
             self.cv_embed = nn.Parameter(torch.zeros(view_num, self.in_planes))
             trunc_normal_(self.cv_embed, std=.02)
-            print('camera number is : {}'.format(view_num))
-
-        dataset_name = cfg.DATASETS.NAMES
-        self.text_encoder = TextEncoder(clip_model)
-
-    def forward(self, x = None, caption=None, get_text = False, cam_label= None, view_label=None):
-        if get_text == True:
+            print('viewpoint number is : {}'.format(view_num))
+            print('using SIE_Lambda is : {}'.format(self.sie_coe))
+            
+    def forward(self, image = None, caption=None, cam_label= None, view_label=None):
+        with torch.no_grad():
             tokenized_caption = clip_tokenize(caption).cuda()
-            text_features = self.text_encoder(tokenized_caption)
-            return text_features
-        
-        if self.model_name == 'RN50':
-            image_features_last, image_features, image_features_proj = self.image_encoder(x) 
-            img_feature_last = nn.functional.avg_pool2d(image_features_last, image_features_last.shape[2:4]).view(x.shape[0], -1) 
-            img_feature = nn.functional.avg_pool2d(image_features, image_features.shape[2:4]).view(x.shape[0], -1) 
-            img_feature_proj = image_features_proj[0]
+            tf_before, tf_after = self.text_encoder(tokenized_caption)
 
-        elif self.model_name == 'ViT-B-16':
-            if cam_label != None and view_label!=None:
-                cv_embed = self.sie_coe * self.cv_embed[cam_label * self.view_num + view_label]
-            elif cam_label != None:
-                cv_embed = self.sie_coe * self.cv_embed[cam_label]
-            elif view_label!=None:
-                cv_embed = self.sie_coe * self.cv_embed[view_label]
-            else:
-                cv_embed = None
-            image_features_last, image_features, image_features_proj = self.image_encoder(x, cv_embed) 
-            img_feature_last = image_features_last[:,0]
-            img_feature = image_features[:,0]
-            img_feature_proj = image_features_proj[:,0]
+        cv_embed = None
+        if cam_label != None and view_label != None:
+            cv_embed = self.sie_coe * self.cv_embed[cam_label * self.view_num + view_label]
+        elif cam_label != None:
+            cv_embed = self.sie_coe * self.cv_embed[cam_label]
+        elif view_label != None:
+            cv_embed = self.sie_coe * self.cv_embed[view_label]
 
-        feat = self.bottleneck(img_feature) 
-        feat_proj = self.bottleneck_proj(img_feature_proj) 
+        penult_imfeat, imfeat = self.image_encoder(image=image, text=tf_before, cv_emb=cv_embed) 
+        penult_imfeat = penult_imfeat[:,0]
+        imfeat = imfeat[:,0]
+
+        feat = self.bottleneck(imfeat) 
         
         if self.training:
             cls_score = self.classifier(feat)
-            cls_score_proj = self.classifier_proj(feat_proj)
-            return [cls_score, cls_score_proj], [img_feature_last, img_feature, img_feature_proj], img_feature_proj
-
+            return [cls_score], [penult_imfeat, imfeat]
         else:
             if self.neck_feat == 'after':
-                # print("Test with feature after BN")
-                return torch.cat([feat, feat_proj], dim=1)
+                return feat
             else:
-                return torch.cat([img_feature, img_feature_proj], dim=1)
+                return imfeat
+
+            # if self.neck_feat == 'after':
+            #     # print("Test with feature after BN")
+            #     return torch.cat([feat, feat_proj], dim=1)
+            # else:
+            #     return torch.cat([img_feature, img_feature_proj], dim=1)
 
 
     def load_param(self, trained_path):

@@ -67,6 +67,8 @@ if __name__ == '__main__':
 
     model = make_model(cfg, num_class=num_classes, camera_num=camera_num, view_num = view_num)
 
+    logger.info("model: {}".format(model))
+
     loss_func, center_criterion = make_loss(cfg, num_classes=num_classes)
 
     # optimizer_1stage = make_optimizer_1stage(cfg, model)
