@@ -1,17 +1,27 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
   METRIC_LOSS_TYPE: 'triplet'
-  IF_LABELSMOOTH: 'off'
+  IF_LABELSMOOTH: 'on'
   IF_WITH_CENTER: 'no'
   NAME: 'ViT-B-16'
-  STRIDE_SIZE: [16, 16]
-  ID_LOSS_WEIGHT : 1.0
+  STRIDE_SIZE: [12, 12] # OLP
+
+  ID_LOSS_WEIGHT : 0.25
   TRIPLET_LOSS_WEIGHT : 1.0
-  I2T_LOSS_WEIGHT : 1.0
+
+  # SIE Embeddings
+  SIE_CAMERA: True 
+  SIE_VIEW: True 
+  SIE_COE : 1.0 
+
+  # SFM Settings
+  SFM_IMAGE_TOKENS: "patch" # patch | all
+  SFM_TEXT_TOKENS: "eot" # eot | all
+
 
 INPUT:
-  SIZE_TRAIN: [256, 256]
-  SIZE_TEST: [256, 256]
+  SIZE_TRAIN: [256, 128]
+  SIZE_TEST: [256, 128]
   PROB: 0.5 # random horizontal flip
   RE_PROB: 0.5 # random erasing
   PADDING: 10
@@ -23,10 +33,10 @@ DATALOADER:
   NUM_INSTANCE: 4
   NUM_WORKERS: 8
 
-SOLVER:
+SOLVER:  
   IMS_PER_BATCH: 64
   OPTIMIZER_NAME: "Adam"
-  BASE_LR: 0.00005
+  BASE_LR: 0.000005
   WARMUP_METHOD: 'linear'
   WARMUP_ITERS: 10
   WARMUP_FACTOR: 0.1
@@ -44,15 +54,16 @@ SOLVER:
   
 TEST:
   EVAL: True
-  IMS_PER_BATCH: 64
-  RE_RANKING: False
+  IMS_PER_BATCH: 256
+  METHOD: 'baseline' # baseline | rerank | uffm | uffm_amc
+  UFFM_K: 5
+  AMC_N_TRIPLETS: 1000
   WEIGHT: ''
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
 DATASETS:
-#   NAMES: ('VehicleID')
-#   ROOT_DIR: ('')
-# OUTPUT_DIR: ''
-
-# CUDA_VISIBLE_DEVICES=2 python train.py --config_file configs/VehicleID/vit_base.yml
+  NAMES: ('agreidv2')
+  ROOT_DIR: ('/datastore/vit/Phong/CLIP-ReID/datasets')
+OUTPUT_DIR: logs/my-clipreid
+# CUDA_VISIBLE_DEVICES=3 python train_clipreid.py --config_file configs/person/vit_clipreid.yml

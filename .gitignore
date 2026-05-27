@@ -8,6 +8,7 @@
 /model/backbones/__pycache__
 /model/clip/__pycache__
 /data/__pycache__
+/evaluation/__pycache__
 /datasets
 /logs
 /slurm-logs

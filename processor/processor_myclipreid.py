@@ -12,17 +12,16 @@ from torch import amp
 
 from utils.meter import AverageMeter
 
-# from evaluation.evaluator import StandardEvaluator
-from utils.metrics import R1_mAP_eval
+from evaluation.evaluator import StandardEvaluator
 
-logger = logging.getLogger("transreid.train")
+logger = logging.getLogger("MyCLIPReID.train")
 
 
-def do_train_stage2(
+def do_train(
     cfg,
     model,
     center_criterion,
-    train_loader_stage2,
+    train_loader,
     val_loader,
     optimizer,
     optimizer_center,
@@ -32,14 +31,12 @@ def do_train_stage2(
     local_rank
 ):
     device = cfg.MODEL.DEVICE
-    epochs = cfg.SOLVER.STAGE2.MAX_EPOCHS
-    log_period = cfg.SOLVER.STAGE2.LOG_PERIOD
+    epochs = cfg.SOLVER.MAX_EPOCHS
+    log_period = cfg.SOLVER.LOG_PERIOD
     checkpoint_period = (
-        cfg.SOLVER.STAGE2.CHECKPOINT_PERIOD
+        cfg.SOLVER.CHECKPOINT_PERIOD
     )
-    eval_period = cfg.SOLVER.STAGE2.EVAL_PERIOD
-
-    logger.info("Start Stage2 Training")
+    eval_period = cfg.SOLVER.EVAL_PERIOD
 
     model.to(local_rank)
     if torch.cuda.device_count() > 1:
@@ -68,7 +65,7 @@ def do_train_stage2(
         acc_meter.reset()
         model.train()
 
-        for n_iter, (img, vid, target_cam, target_view, img_path) in enumerate(train_loader_stage2):
+        for n_iter, (img, vid, target_cam, target_view, img_path) in enumerate(train_loader):
             optimizer.zero_grad()
             optimizer_center.zero_grad()
             img = img.to(device)
@@ -110,7 +107,7 @@ def do_train_stage2(
                 logger.info(
                     f"Epoch[{epoch}] "
                     f"Iter[{n_iter + 1}/"
-                    f"{len(train_loader_stage2)}] "
+                    f"{len(train_loader)}] "
                     f"Loss: {loss_meter.avg:.3f}, "
                     f"Acc: {acc_meter.avg:.3f}, "
                     f"Lr: "
@@ -127,7 +124,7 @@ def do_train_stage2(
             f"Time per batch: "
             f"{time_per_batch:.3f}[s] "
             f"Speed: "
-            f"{train_loader_stage2.batch_size / time_per_batch:.1f}"
+            f"{train_loader.batch_size / time_per_batch:.1f}"
             f"[samples/s]"
         )
 
@@ -164,8 +161,8 @@ def validate(
 ):
     device = cfg.MODEL.DEVICE
     model.eval()
-    evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)
-    evaluator.reset()
+    evaluator = StandardEvaluator(num_query=num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)
+
     for (img, vid, camid, camids, target_view, img_path) in val_loader:
         img = img.to(device)
         captions = [caption_dict[p] for p in img_path]
@@ -181,67 +178,12 @@ def validate(
             target_view = None
 
         feat = model(image=img, caption=captions, cam_label=camids, view_label=target_view)
-        evaluator.update((feat, vid, camid))
+        evaluator.update(feats=feat, pids=vid, camids=camid)
 
-    cmc, mAP, _, _, _, _, _ = evaluator.compute()
+    cmc, mAP = evaluator.evaluate()
     logger.info("Validation Results ")
     logger.info("mAP: {:.2%}".format(mAP))
     for r in [1, 5, 10]:
         logger.info("CMC curve, Rank-{:<3}:{:.2%}".format(r, cmc[r - 1]))
 
     torch.cuda.empty_cache()
-
-
-def do_inference(cfg,
-                 model,
-                 val_loader,
-                 num_query):
-    device = "cuda"
-    logger = logging.getLogger("transreid.test")
-    logger.info("Enter inferencing")
-
-    evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)
-
-    evaluator.reset()
-
-    if device:
-        if torch.cuda.device_count() > 1:
-            print('Using {} GPUs for inference'.format(torch.cuda.device_count()))
-            model = nn.DataParallel(model)
-        model.to(device)
-
-    with open("caption/captions_all_BLIP_finetuned.json", "r") as f:
-        captions_all = json.load(f)
-    
-    caption_dict = {
-        item['image_path'] : item['caption'] for item in captions_all if item['status'] == "ok"
-    }
-
-    model.eval()
-    img_path_list = []
-
-    for n_iter, (img, pid, camid, camids, target_view, img_path) in enumerate(val_loader):
-        with torch.no_grad():
-            img = img.to(device)
-            captions = [caption_dict[p] for p in img_path]
-
-            if cfg.MODEL.SIE_CAMERA:
-                camids = camids.to(device)
-            else: 
-                camids = None
-            if cfg.MODEL.SIE_VIEW:
-                target_view = target_view.to(device)
-            else: 
-                target_view = None
-                
-            feat = model(image=img, caption=captions, cam_label=camids, view_label=target_view)
-            evaluator.update((feat, pid, camid))
-            img_path_list.extend(img_path)
-
-
-    cmc, mAP, _, _, _, _, _ = evaluator.compute()
-    logger.info("Validation Results ")
-    logger.info("mAP: {:.2%}".format(mAP))
-    for r in [1, 5, 10]:
-        logger.info("CMC curve, Rank-{:<3}:{:.2%}".format(r, cmc[r - 1]))
-    return cmc[0], cmc[4]

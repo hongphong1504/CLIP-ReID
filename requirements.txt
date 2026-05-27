@@ -6,3 +6,4 @@ ftfy
 regex
 mat4py
 pandas
+scikit-learn

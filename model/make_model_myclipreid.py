@@ -44,24 +44,36 @@ class TextEncoder(nn.Module):
     def forward(self, text): 
         x = self.token_embedding(text).type(self.dtype)
         x = x + self.positional_embedding.type(self.dtype)
+
         x = x.permute(1, 0, 2)  # NLD -> LND 
         x = self.transformer(x)     
         x = x.permute(1, 0, 2)  # LND -> NLD
+
         x = self.ln_final(x).type(self.dtype) 
+
+        # all text tokens
+        text_tokens = x      # (B, Lt, Dt)
 
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
-        x_before = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] 
-        x_after = x_before @ self.text_projection
-        return x_before, x_after
+        eot_feat = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] 
+
+        proj_feat = eot_feat @ self.text_projection
+
+        return text_tokens, eot_feat, proj_feat
 
 class SFM(nn.Module):
     def __init__(self,
                  vision_dim=768,
                  text_dim=512,
                  attn_dim=512,
-                 reduction=4):
+                 reduction=4,
+                 image_token_type='patch',
+                 text_token_type='eot'):
         super(SFM, self).__init__()
+        self.image_token_type = image_token_type
+        self.text_token_type = text_token_type
+
         # Cross-modal attention
         self.text_proj = nn.Linear(text_dim, attn_dim)
         self.norm = nn.LayerNorm(vision_dim)
@@ -91,37 +103,48 @@ class SFM(nn.Module):
     def forward(self, image_feat, text_feat):
         """
         image_feat: (B, N, Dv)
-        text_feat: (B, Dt)
+        text_feat: (B, Dt) if text_token_type is 'eot', else (B, Lt, Dt)
         """
         dtype = image_feat.dtype
         text_feat = text_feat.to(dtype)
 
-        B, N, Dv = image_feat.shape
-
-        # Separate cls token and patch tokens
         cls_token = image_feat[:, :1]       # (B,1,Dv)
         patch_feat = image_feat[:, 1:]      # (B,N-1,Dv)
 
-        # Query from text
-        Q = self.text_proj(text_feat).type(dtype)           # (B,Da)
-        Q = Q.unsqueeze(1)                      # (B,1,Da)
+        if self.image_token_type == 'patch':
+            visual_tokens = patch_feat
+        else: # self.image_token_type == 'all'
+            visual_tokens = image_feat
 
-        # Key from image patches
-        patch_norm = self.norm(patch_feat)
-        K = self.image_proj(patch_norm)         # (B,Np,Da)
+        # Query from text
+        if self.text_token_type == 'eot':
+            Q = self.text_proj(text_feat).type(dtype).unsqueeze(1)   # (B,1,Da)
+        else: # self.text_token_type == 'all'
+            Q = self.text_proj(text_feat).type(dtype)                # (B,Lt,Da)
+
+        # Key from visual 
+        visual_norm = self.norm(visual_tokens)
+        K = self.image_proj(visual_norm)         # (B,Lv,Da)
 
         # Cross-modal attention
-        attn = torch.matmul(Q, K.transpose(-1, -2)) # (B,1,Np)
+        attn = torch.matmul(Q, K.transpose(-1, -2))   
         attn = attn / math.sqrt(K.shape[-1])
         attn = attn + self.attn_bias
-        A = torch.sigmoid(attn)                 # (B,1,Np)
+
+        A = torch.sigmoid(attn)                 
+        if self.text_token_type == 'all':
+            A = A.mean(dim=1, keepdim=True)
 
         # Gated image representation
-        A_t = A.transpose(1, 2)                 # (B,Np,1)
-        X_gated = patch_feat * A_t              # (B,Np,Dv)
+        A_t = A.transpose(1, 2)                 
+        X_gated = visual_tokens * A_t            
 
         # Dynamic channel weighting
-        w_c = self.channel_mlp(text_feat)       # (B,Dv)
+        if self.text_token_type == 'eot':
+            text_global = text_feat
+        else:
+            text_global = text_feat.mean(dim=1)
+        w_c = self.channel_mlp(text_global)       # (B,Dv)
         w_c = w_c.unsqueeze(1)                  # (B,1,Dv)
         channel_refined = X_gated * w_c         # (B,Np,Dv)
         channel_refined = self.refine_fc(channel_refined)
@@ -130,17 +153,20 @@ class SFM(nn.Module):
         X_sfm = X_gated + channel_refined
     
         # Re-attach cls token
-        out = torch.cat([cls_token, X_sfm], dim=1)
+        if self.image_token_type == 'patch':
+            out = torch.cat([cls_token, X_sfm], dim=1)
+        else:
+            out = X_sfm
 
         out = self.out_norm(out)
 
         return out
 
 class ImageEncoder(nn.Module):
-    def __init__(self, clip_visual):
+    def __init__(self, clip_visual, image_token_type='patch', text_token_type='eot'):
         super().__init__()
         self.visual = clip_visual
-        self.sfm = SFM(attn_dim=512, reduction=4) # mặc định đang là VIT-B16, chưa cài đặt cho kiến trúc khác
+        self.sfm = SFM(attn_dim=512, reduction=4, image_token_type=image_token_type, text_token_type=text_token_type) # mặc định đang là VIT-B16, chưa cài đặt cho kiến trúc khác
 
     def forward(self, image, text, cv_emb=None):
         x = self.visual.conv1(image) 
@@ -179,6 +205,8 @@ class build_transformer(nn.Module):
         self.cos_layer = cfg.MODEL.COS_LAYER
         self.neck = cfg.MODEL.NECK
         self.neck_feat = cfg.TEST.NECK_FEAT
+        self.sfm_text_tokens = cfg.MODEL.SFM_TEXT_TOKENS
+
         if self.model_name == 'ViT-B-16':
             self.in_planes = 768
             self.in_planes_proj = 512
@@ -203,7 +231,7 @@ class build_transformer(nn.Module):
         clip_model = load_clip_to_cpu(self.model_name, self.h_resolution, self.w_resolution, self.vision_stride_size)
         clip_model.to("cuda")
 
-        self.image_encoder = ImageEncoder(clip_model.visual)
+        self.image_encoder = ImageEncoder(clip_model.visual, image_token_type=cfg.MODEL.SFM_IMAGE_TOKENS, text_token_type=cfg.MODEL.SFM_TEXT_TOKENS)
         self.text_encoder = TextEncoder(clip_model)
 
         if cfg.MODEL.SIE_CAMERA and cfg.MODEL.SIE_VIEW:
@@ -225,7 +253,7 @@ class build_transformer(nn.Module):
     def forward(self, image = None, caption=None, cam_label= None, view_label=None):
         with torch.no_grad():
             tokenized_caption = clip_tokenize(caption).cuda()
-            tf_before, tf_after = self.text_encoder(tokenized_caption)
+            text_tokens, eot_feat, text_proj = self.text_encoder(tokenized_caption)
 
         cv_embed = None
         if cam_label != None and view_label != None:
@@ -235,7 +263,12 @@ class build_transformer(nn.Module):
         elif view_label != None:
             cv_embed = self.sie_coe * self.cv_embed[view_label]
 
-        penult_imfeat, imfeat = self.image_encoder(image=image, text=tf_before, cv_emb=cv_embed) 
+        if self.sfm_text_tokens == 'eot':
+            text_input = eot_feat
+        else:
+            text_input = text_tokens
+
+        penult_imfeat, imfeat = self.image_encoder(image=image, text=text_input, cv_emb=cv_embed) 
         penult_imfeat = penult_imfeat[:,0]
         imfeat = imfeat[:,0]
 
@@ -249,12 +282,6 @@ class build_transformer(nn.Module):
                 return feat
             else:
                 return imfeat
-
-            # if self.neck_feat == 'after':
-            #     # print("Test with feature after BN")
-            #     return torch.cat([feat, feat_proj], dim=1)
-            # else:
-            #     return torch.cat([img_feature, img_feature_proj], dim=1)
 
 
     def load_param(self, trained_path):

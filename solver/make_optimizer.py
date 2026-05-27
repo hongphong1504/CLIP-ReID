@@ -2,7 +2,11 @@ import torch
 
 def make_optimizer(cfg, model, center_criterion):
     params = []
+    keys = []
     for key, value in model.named_parameters():
+        if "text_encoder" in key:
+            value.requires_grad_(False)
+            continue   
         if not value.requires_grad:
             continue
         lr = cfg.SOLVER.BASE_LR
@@ -14,9 +18,9 @@ def make_optimizer(cfg, model, center_criterion):
             if "classifier" in key or "arcface" in key:
                 lr = cfg.SOLVER.BASE_LR * 2
                 print('Using two times learning rate for fc ')
-
+        
         params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
-
+        keys += [key]
     if cfg.SOLVER.OPTIMIZER_NAME == 'SGD':
         optimizer = getattr(torch.optim, cfg.SOLVER.OPTIMIZER_NAME)(params, momentum=cfg.SOLVER.MOMENTUM)
     elif cfg.SOLVER.OPTIMIZER_NAME == 'AdamW':
