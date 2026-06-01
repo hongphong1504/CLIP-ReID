@@ -8,13 +8,25 @@ from timm.data.random_erasing import RandomErasing
 from .sampler import RandomIdentitySampler
 from .sampler_ddp import RandomIdentitySampler_DDP
 import torch.distributed as dist
+
+from .agreid import AG_ReID, AG_ReID_G2A
 from .agreidv2 import AG_ReID_v2, AG_ReID_v2_G2A, AG_ReID_v2_A2W, AG_ReID_v2_W2A
+from .cargo import CARGO, CARGO_AA, CARGO_GG, CARGO_AG, CARGO_GA
 
 __factory = {
+    'agreid': AG_ReID,
+    'agreid_g2a': AG_ReID_G2A,
+
     'agreidv2': AG_ReID_v2,
     'agreidv2_g2a': AG_ReID_v2_G2A,
     'agreidv2_a2w': AG_ReID_v2_A2W,
     'agreidv2_w2a': AG_ReID_v2_W2A,
+
+    'cargo': CARGO,
+    'cargo_aa': CARGO_AA,
+    'cargo_gg': CARGO_GG,
+    'cargo_ag': CARGO_AG,  
+    'cargo_ga': CARGO_GA, 
 }
 
 def train_collate_fn(batch):
@@ -33,7 +45,7 @@ def val_collate_fn(batch):
     camids_batch = torch.tensor(camids, dtype=torch.int64)
     return torch.stack(imgs, dim=0), pids, camids, camids_batch, viewids, img_paths
 
-def make_dataloader(cfg):
+def make_dataloader(cfg, dataset_name=None, is_train=True):
     train_transforms = T.Compose([
             T.Resize(cfg.INPUT.SIZE_TRAIN, interpolation=3),
             T.RandomHorizontalFlip(p=cfg.INPUT.PROB),
@@ -53,7 +65,12 @@ def make_dataloader(cfg):
 
     num_workers = cfg.DATALOADER.NUM_WORKERS
 
-    dataset = __factory[cfg.DATASETS.NAMES](root=cfg.DATASETS.ROOT_DIR)
+    if is_train:
+        dataset_name = cfg.DATASETS.NAMES
+    else:
+        dataset_name = dataset_name
+        
+    dataset = __factory[dataset_name](root=cfg.DATASETS.ROOT_DIR)
     
     train_set = ImageDataset(dataset.train, train_transforms)
     num_classes = dataset.num_train_pids

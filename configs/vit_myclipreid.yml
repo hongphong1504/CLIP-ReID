@@ -66,6 +66,7 @@ TEST:
 
 DATASETS:
   NAMES: ('agreidv2')
+  TESTS: ('agreidv2', 'agreidv2_g2a', 'agreidv2_a2w', 'agreidv2_w2a')
   ROOT_DIR: ('/datastore/vit/Phong/CLIP-ReID/datasets')
 OUTPUT_DIR: logs/my-clipreid
 # CUDA_VISIBLE_DEVICES=3 python train_clipreid.py --config_file configs/person/vit_clipreid.yml
