@@ -1,4 +1,3 @@
-import json
 import torch
 import torch.nn as nn
 import random
@@ -82,19 +81,11 @@ if __name__ == "__main__":
     if cfg.TEST.METHOD == "uffm_amc":
         logger.info("Estimating AMC coefficients from training set")
 
-        with open("caption/captions_all_BLIP_finetuned.json", "r") as f:
-            captions_all = json.load(f)
-    
-        caption_dict = {
-            item['image_path'] : item['caption'] for item in captions_all if item['status'] == "ok"
-        }
-
         estimator = AMCEstimator(cfg)
 
         alpha, beta, theta = estimator.fit(
             model=model,
             train_loader=train_loader,
-            caption_dict=caption_dict,
             n_data=cfg.TEST.AMC_N_TRIPLETS,
             rand_seed=cfg.SOLVER.SEED
         )
@@ -116,6 +107,7 @@ if __name__ == "__main__":
             beta=beta,
             theta=theta
         )
+
         logger.info(f"Evaluating on {dataset_name}")
         do_inference(cfg, model, val_loader, evaluator)
     

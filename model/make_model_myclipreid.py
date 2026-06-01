@@ -6,7 +6,6 @@ import math
 from .clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 _tokenizer = _Tokenizer()
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_   
-from .clip.clip import tokenize as clip_tokenize
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
@@ -374,8 +373,7 @@ class build_transformer(nn.Module):
             
     def forward(self, image = None, caption=None, cam_label= None, view_label=None):
         with torch.no_grad():
-            tokenized_caption = clip_tokenize(caption).cuda()
-            text_tokens, eot_feat, text_proj = self.text_encoder(tokenized_caption)
+            text_tokens, eot_feat, text_proj = self.text_encoder(caption)
 
         cv_embed = None
         if cam_label != None and view_label != None:

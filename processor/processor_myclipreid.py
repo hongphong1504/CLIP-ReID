@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import time
@@ -50,13 +49,6 @@ def do_train(
     acc_meter = AverageMeter()
     scaler = amp.GradScaler("cuda")
 
-    with open("caption/captions_all_BLIP_finetuned.json", "r") as f:
-        captions_all = json.load(f)
-    
-    caption_dict = {
-        item['image_path'] : item['caption'] for item in captions_all if item['status'] == "ok"
-    }
-
     all_start_time = time.monotonic()
 
     for epoch in range(1, epochs + 1):
@@ -65,11 +57,12 @@ def do_train(
         acc_meter.reset()
         model.train()
 
-        for n_iter, (img, vid, target_cam, target_view, img_path) in enumerate(train_loader):
+        for n_iter, (img, vid, target_cam, target_view, captions, img_path) in enumerate(train_loader):
             optimizer.zero_grad()
             optimizer_center.zero_grad()
             img = img.to(device)
             target = vid.to(device)
+            captions = captions.to(device)
 
             if cfg.MODEL.SIE_CAMERA:
                 target_cam = target_cam.to(device)
@@ -80,8 +73,6 @@ def do_train(
                 target_view = target_view.to(device)
             else:
                 target_view = None
-
-            captions = [caption_dict[p] for p in img_path]
 
             with amp.autocast("cuda", enabled=True):
                 score, feat = model(image=img, caption=captions, cam_label=target_cam, view_label=target_view)
@@ -132,7 +123,7 @@ def do_train(
             save_checkpoint(cfg, model, epoch)
 
         if epoch % eval_period == 0:
-            validate(cfg=cfg, model=model, val_loader=val_loader, num_query=num_query, caption_dict=caption_dict)
+            validate(cfg=cfg, model=model, val_loader=val_loader, num_query=num_query)
 
     total_time = timedelta(seconds=time.monotonic() - all_start_time)
 
@@ -156,17 +147,16 @@ def validate(
     cfg,
     model,
     val_loader,
-    num_query,
-    caption_dict
+    num_query
 ):
     device = cfg.MODEL.DEVICE
     model.eval()
     evaluator = StandardEvaluator(num_query=num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)
 
-    for (img, vid, camid, camids, target_view, img_path) in val_loader:
+    for (img, vid, camid, camids, target_view, captions, img_path) in val_loader:
         img = img.to(device)
-        captions = [caption_dict[p] for p in img_path]
-
+        captions = captions.to(device)
+        
         if cfg.MODEL.SIE_CAMERA:
             camids = camids.to(device)
         else:

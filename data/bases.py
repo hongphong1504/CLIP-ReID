@@ -1,10 +1,12 @@
 from PIL import Image, ImageFile
-
+import json
 from torch.utils.data import Dataset
 import os.path as osp
 import random
 import torch
 ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+from model.clip.clip import tokenize as clip_tokenize
 
 
 def read_image(img_path):
@@ -68,9 +70,29 @@ class BaseImageDataset(BaseDataset):
 
 
 class ImageDataset(Dataset):
-    def __init__(self, dataset, transform=None):
+    def __init__(self, dataset, caption_path, transform=None):
         self.dataset = dataset
         self.transform = transform
+
+        with open(caption_path, "r") as f:
+            captions = json.load(f)
+
+        raw_caption_dict = {
+            item['image_path']: item['caption'] 
+            for item in captions
+        }
+
+        self.caption_dict = {}
+        print("Tokenizing all captions...")
+        for img_path, _, _, _ in self.dataset:
+            caption_text = raw_caption_dict.get(img_path, "a person in the image")
+            tokenized = clip_tokenize(caption_text)
+
+            if tokenized.ndim > 1 and tokenized.size(0) == 1:
+                tokenized = tokenized.squeeze(0)
+            self.caption_dict[img_path] = tokenized
+        print(f"Loaded and tokenized {len(self.caption_dict)} captions from {caption_path}!")
+        
 
     def __len__(self):
         return len(self.dataset)
@@ -82,4 +104,6 @@ class ImageDataset(Dataset):
         if self.transform is not None:
             img = self.transform(img)
 
-        return img, pid, camid, trackid, img_path
+        caption = self.caption_dict.get(img_path)
+
+        return img, pid, camid, trackid, caption, img_path

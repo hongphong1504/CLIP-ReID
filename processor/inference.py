@@ -1,4 +1,3 @@
-import json
 import logging
 import torch
 import torch.nn as nn
@@ -12,18 +11,11 @@ def do_inference(cfg,
                  evaluator):
     device = cfg.MODEL.DEVICE
 
-    with open("caption/captions_all_BLIP_finetuned.json", "r") as f:
-        captions_all = json.load(f)
-    
-    caption_dict = {
-        item['image_path'] : item['caption'] for item in captions_all if item['status'] == "ok"
-    }
-
-    for n_iter, (img, pid, camid, camids, target_view, img_path) in enumerate(val_loader):
+    for n_iter, (img, pid, camid, camids, target_view, captions, img_path) in enumerate(val_loader):
         with torch.no_grad():
             img = img.to(device)
-            captions = [caption_dict[p] for p in img_path]
-
+            captions = captions.to(device)
+            
             if cfg.MODEL.SIE_CAMERA:
                 camids = camids.to(device)
             else: 

@@ -25,8 +25,7 @@ class AMCEstimator:
     def extract_features(
         self,
         model,
-        train_loader,
-        caption_dict
+        train_loader
     ):
 
         model.eval()
@@ -37,10 +36,10 @@ class AMCEstimator:
 
         for batch in tqdm(train_loader, desc="ExtractTrainFeat"):
 
-            img, pid, camid, view_id, img_path = batch
+            img, pid, camid, view_id, captions, img_path = batch
 
             img = img.to(self.device)
-            captions = [caption_dict[p] for p in img_path]
+            captions = captions.to(self.device)
 
             if self.cfg.MODEL.SIE_CAMERA:
                 camid = camid.to(self.device)
@@ -69,9 +68,9 @@ class AMCEstimator:
             np.asarray(camids)
         )
     
-    def fit(self, model, train_loader, caption_dict, n_data=1000, rand_seed=1234):
+    def fit(self, model, train_loader, n_data=1000, rand_seed=1234):
         print("Fitting AMC (n={})...".format(n_data))
-        feats, f_ids, f_camids = self.extract_features(model, train_loader, caption_dict)
+        feats, f_ids, f_camids = self.extract_features(model, train_loader)
 
         np.random.seed(rand_seed)
 
