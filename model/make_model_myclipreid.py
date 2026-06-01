@@ -103,7 +103,7 @@ class SFM(nn.Module):
     def forward(self, image_feat, text_feat):
         """
         image_feat: (B, N, Dv)
-        text_feat: (B, Dt) if text_token_type is 'eot', else (B, Lt, Dt)
+        text_feat: (B, Dt) if text_token_type is 'eot', else (B, Nt, Dt)
         """
         dtype = image_feat.dtype
         text_feat = text_feat.to(dtype)
@@ -162,11 +162,132 @@ class SFM(nn.Module):
 
         return out
 
+class TVF(nn.Module):
+
+    def __init__(
+        self,
+        vision_dim=768,
+        text_dim=512,
+        attn_dim=512,
+        reduction=4,
+        image_token_type='patch',
+        text_token_type='eot'
+    ):
+        super().__init__()
+
+        self.image_token_type = image_token_type
+        self.text_token_type = text_token_type
+
+        # Cross attention
+        self.q_proj = nn.Linear(vision_dim, attn_dim)
+        self.k_proj = nn.Linear(text_dim, attn_dim)
+        self.v_proj = nn.Linear(text_dim, attn_dim)
+
+        self.out_proj = nn.Linear(attn_dim, vision_dim)
+
+        self.q_proj.apply(weights_init_kaiming)
+        self.k_proj.apply(weights_init_kaiming)
+        self.v_proj.apply(weights_init_kaiming)
+        self.out_proj.apply(weights_init_kaiming)
+
+        # learnable fusion strength
+        self.gamma = nn.Parameter(torch.tensor(0.05))
+
+        # channel modulation branch
+        hidden_dim = vision_dim // reduction
+        self.channel_mlp = nn.Sequential(
+            nn.Linear(text_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, vision_dim),
+            nn.Sigmoid()
+        )
+
+        self.channel_mlp.apply(weights_init_kaiming)
+
+        self.refine_fc = nn.Sequential(
+            nn.Linear(vision_dim, vision_dim),
+            nn.GELU()
+        )
+        self.refine_fc.apply(weights_init_kaiming)
+
+        self.out_norm = nn.LayerNorm(vision_dim)
+
+    def forward(self, image_feat, text_feat):
+        """
+        image_feat : (B,Nv,Dv)
+        text_feat: (B, Dt) if text_token_type is 'eot', else (B, Nt, Dt)
+        """
+        dtype = image_feat.dtype
+        text_feat = text_feat.to(dtype)
+
+        cls_token = image_feat[:, :1]
+        patch_tokens = image_feat[:, 1:]
+
+        if self.image_token_type == 'patch':
+            visual_tokens = patch_tokens
+        else:
+            visual_tokens = image_feat
+
+        if self.text_token_type == 'eot':
+            K_text = text_feat.unsqueeze(1)
+            V_text = text_feat.unsqueeze(1)
+            text_global = text_feat
+        else:
+            K_text = text_feat
+            V_text = text_feat
+            text_global = text_feat.mean(dim=1)
+
+        Q = self.q_proj(visual_tokens)
+        K = self.k_proj(K_text)
+        V = self.v_proj(V_text)
+
+        # Cross-attion
+        attn = torch.matmul(Q, K.transpose(-1, -2))
+        attn = attn / math.sqrt(Q.shape[-1])
+        attn = torch.softmax(attn, dim=-1)
+
+        context = torch.matmul(attn, V)
+        context = self.out_proj(context)
+
+        fused = visual_tokens + self.gamma * context
+
+        # Channel modulation
+        channel_gate = self.channel_mlp(text_global)
+        channel_gate = channel_gate.unsqueeze(1)
+
+        fused = fused * channel_gate
+
+        # Refinement
+        fused = fused + self.refine_fc(fused)
+
+        if self.image_token_type == 'patch':
+            out = torch.cat([cls_token, fused], dim=1)
+        else:
+            out = fused
+
+        out = self.out_norm(out)
+
+        return out
+
 class ImageEncoder(nn.Module):
-    def __init__(self, clip_visual, image_token_type='patch', text_token_type='eot'):
+    def __init__(self, clip_visual, cfg):
         super().__init__()
         self.visual = clip_visual
-        self.sfm = SFM(attn_dim=512, reduction=4, image_token_type=image_token_type, text_token_type=text_token_type) # mặc định đang là VIT-B16, chưa cài đặt cho kiến trúc khác
+
+        if cfg.MODEL.FUSION_TYPE == "SFM":
+            self.fusion = SFM(
+                attn_dim=512, 
+                reduction=4, 
+                image_token_type=cfg.MODEL.FUSION_IMAGE_TOKENS, 
+                text_token_type=cfg.MODEL.FUSION_TEXT_TOKENS
+            )
+        else: # TVF
+            self.fusion = TVF(
+                attn_dim=512,
+                reduction=4,
+                image_token_type=cfg.MODEL.FUSION_IMAGE_TOKENS,
+                text_token_type=cfg.MODEL.FUSION_TEXT_TOKENS
+            )
 
     def forward(self, image, text, cv_emb=None):
         x = self.visual.conv1(image) 
@@ -185,7 +306,7 @@ class ImageEncoder(nn.Module):
         x11 = self.visual.transformer.resblocks[:11](x)
 
         x11 = x11.permute(1, 0, 2)
-        x11 = self.sfm(x11, text)
+        x11 = self.fusion(x11, text)
         x11 = x11.permute(1, 0, 2)
 
         x12 = self.visual.transformer.resblocks[11](x11) 
@@ -205,7 +326,8 @@ class build_transformer(nn.Module):
         self.cos_layer = cfg.MODEL.COS_LAYER
         self.neck = cfg.MODEL.NECK
         self.neck_feat = cfg.TEST.NECK_FEAT
-        self.sfm_text_tokens = cfg.MODEL.SFM_TEXT_TOKENS
+        self.fusion_text_tokens = cfg.MODEL.FUSION_TEXT_TOKENS
+        self.concat_penult_feat = cfg.TEST.CONCAT_PENULT_FEAT
 
         if self.model_name == 'ViT-B-16':
             self.in_planes = 768
@@ -231,7 +353,7 @@ class build_transformer(nn.Module):
         clip_model = load_clip_to_cpu(self.model_name, self.h_resolution, self.w_resolution, self.vision_stride_size)
         clip_model.to("cuda")
 
-        self.image_encoder = ImageEncoder(clip_model.visual, image_token_type=cfg.MODEL.SFM_IMAGE_TOKENS, text_token_type=cfg.MODEL.SFM_TEXT_TOKENS)
+        self.image_encoder = ImageEncoder(clip_model.visual, cfg)
         self.text_encoder = TextEncoder(clip_model)
 
         if cfg.MODEL.SIE_CAMERA and cfg.MODEL.SIE_VIEW:
@@ -263,7 +385,7 @@ class build_transformer(nn.Module):
         elif view_label != None:
             cv_embed = self.sie_coe * self.cv_embed[view_label]
 
-        if self.sfm_text_tokens == 'eot':
+        if self.fusion_text_tokens == 'eot':
             text_input = eot_feat
         else:
             text_input = text_tokens
@@ -278,11 +400,10 @@ class build_transformer(nn.Module):
             cls_score = self.classifier(feat)
             return [cls_score], [penult_imfeat, imfeat]
         else:
-            if self.neck_feat == 'after':
-                return feat
-            else:
-                return imfeat
-
+            out_feat = imfeat if self.neck_feat == 'before' else feat
+            if self.concat_penult_feat:
+                out_feat = torch.cat([out_feat, penult_imfeat], dim=1)
+            return out_feat
 
     def load_param(self, trained_path):
         param_dict = torch.load(trained_path)

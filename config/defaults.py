@@ -61,9 +61,12 @@ _C.MODEL.SIE_COE = 3.0
 _C.MODEL.SIE_CAMERA = False
 _C.MODEL.SIE_VIEW = False
 
+# Fusion setting
+_C.MODEL.FUSION_TYPE = 'SFM' # SFM | TVF 
+
 # SFM setting
-_C.MODEL.SFM_IMAGE_TOKENS = "patch" # patch | all
-_C.MODEL.SFM_TEXT_TOKENS = "eot" # eot | all
+_C.MODEL.FUSION_IMAGE_TOKENS = "patch" # patch | all
+_C.MODEL.FUSION_TEXT_TOKENS = "eot" # eot | all
 
 # -----------------------------------------------------------------------------
 # INPUT
@@ -182,6 +185,8 @@ _C.TEST.WEIGHT = ""
 _C.TEST.NECK_FEAT = 'after'
 # Whether feature is nomalized before test, if yes, it is equivalent to cosine distance
 _C.TEST.FEAT_NORM = 'yes'
+# Whether concatenate the features of penultimate layer and last layer for test, options: 'True', 'False'
+_C.TEST.CONCAT_PENULT_FEAT = True 
 
 # Name for saving the distmat after testing.
 _C.TEST.DIST_MAT = "dist_mat.npy"
