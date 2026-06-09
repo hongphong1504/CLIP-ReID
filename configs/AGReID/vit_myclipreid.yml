@@ -15,9 +15,9 @@ MODEL:
   SIE_COE : 1.0 
 
   # Fusion Settings
-  FUSION_TYPE: 'SFM' # SFM | TVF 
+  FUSION_TYPE: 'TVF' # SFM | TVF 
   FUSION_IMAGE_TOKENS: "patch" # patch | all
-  FUSION_TEXT_TOKENS: "eot" # eot | all
+  FUSION_TEXT_TOKENS: "all" # eot | all
 
 
 INPUT:
@@ -65,9 +65,9 @@ TEST:
   CONCAT_PENULT_FEAT: True
 
 DATASETS:
-  NAMES: ('agreidv2')
-  TESTS: ('agreidv2', 'agreidv2_g2a', 'agreidv2_a2w', 'agreidv2_w2a')
+  NAMES: ('agreid')
+  TESTS: ('agreid', 'agreid_g2a')
   ROOT_DIR: ('/datastore/vit/Phong/CLIP-ReID/datasets')
-  CAPTION_PATH: ('/datastore/vit/Phong/CLIP-ReID/datasets/captions/AG-ReID.v2_captions.json')
-OUTPUT_DIR: logs/my-clipreid
+  CAPTION_PATH: ('/datastore/vit/Phong/CLIP-ReID/datasets/captions/AG-ReID_captions.json')
+OUTPUT_DIR: logs/agreid/my-clipreid
 # CUDA_VISIBLE_DEVICES=3 python train_clipreid.py --config_file configs/person/vit_clipreid.yml

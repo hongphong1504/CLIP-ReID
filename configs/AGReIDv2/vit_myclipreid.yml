@@ -1,0 +1,73 @@
+MODEL:
+  PRETRAIN_CHOICE: 'imagenet'
+  METRIC_LOSS_TYPE: 'triplet'
+  IF_LABELSMOOTH: 'on'
+  IF_WITH_CENTER: 'no'
+  NAME: 'ViT-B-16'
+  STRIDE_SIZE: [12, 12] # OLP
+
+  ID_LOSS_WEIGHT : 0.25
+  TRIPLET_LOSS_WEIGHT : 1.0
+
+  # SIE Embeddings
+  SIE_CAMERA: True 
+  SIE_VIEW: True 
+  SIE_COE : 1.0 
+
+  # Fusion Settings
+  FUSION_TYPE: 'TVF' # SFM | TVF 
+  FUSION_IMAGE_TOKENS: "patch" # patch | all
+  FUSION_TEXT_TOKENS: "all" # eot | all
+
+
+INPUT:
+  SIZE_TRAIN: [256, 128]
+  SIZE_TEST: [256, 128]
+  PROB: 0.5 # random horizontal flip
+  RE_PROB: 0.5 # random erasing
+  PADDING: 10
+  PIXEL_MEAN: [0.5, 0.5, 0.5]
+  PIXEL_STD: [0.5, 0.5, 0.5]
+
+DATALOADER:
+  SAMPLER: 'softmax_triplet'
+  NUM_INSTANCE: 4
+  NUM_WORKERS: 8
+
+SOLVER:  
+  IMS_PER_BATCH: 64
+  OPTIMIZER_NAME: "Adam"
+  BASE_LR: 0.000005
+  WARMUP_METHOD: 'linear'
+  WARMUP_ITERS: 10
+  WARMUP_FACTOR: 0.1
+  WEIGHT_DECAY:  0.0001
+  WEIGHT_DECAY_BIAS: 0.0001
+  LARGE_FC_LR: False
+  MAX_EPOCHS: 60
+  CHECKPOINT_PERIOD: 60
+  LOG_PERIOD: 50
+  EVAL_PERIOD: 60
+  BIAS_LR_FACTOR: 2
+  
+  STEPS: [30, 50]
+  GAMMA: 0.1
+  
+TEST:
+  EVAL: True
+  IMS_PER_BATCH: 256
+  METHOD: 'baseline' # baseline | rerank | uffm | uffm_amc
+  UFFM_K: 5
+  AMC_N_TRIPLETS: 1000
+  WEIGHT: ''
+  NECK_FEAT: 'before'
+  FEAT_NORM: 'yes'
+  CONCAT_PENULT_FEAT: True
+
+DATASETS:
+  NAMES: ('agreidv2')
+  TESTS: ('agreidv2', 'agreidv2_g2a', 'agreidv2_a2w', 'agreidv2_w2a')
+  ROOT_DIR: ('/datastore/vit/Phong/CLIP-ReID/datasets')
+  CAPTION_PATH: ('/datastore/vit/Phong/CLIP-ReID/datasets/captions/AG-ReID.v2_captions.json')
+OUTPUT_DIR: logs/agreidv2/my-clipreid
+# CUDA_VISIBLE_DEVICES=3 python train_clipreid.py --config_file configs/person/vit_clipreid.yml

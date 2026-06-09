@@ -70,9 +70,13 @@ class BaseImageDataset(BaseDataset):
 
 
 class ImageDataset(Dataset):
-    def __init__(self, dataset, caption_path, transform=None):
+    def __init__(self, dataset, caption_path=None, transform=None):
         self.dataset = dataset
         self.transform = transform
+
+        if caption_path is None:
+            self.caption_dict = {}
+            return
 
         with open(caption_path, "r") as f:
             captions = json.load(f)
