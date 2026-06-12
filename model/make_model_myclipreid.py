@@ -192,23 +192,6 @@ class TVF(nn.Module):
         # learnable fusion strength
         self.gamma = nn.Parameter(torch.tensor(0.05))
 
-        # channel modulation branch
-        hidden_dim = vision_dim // reduction
-        self.channel_mlp = nn.Sequential(
-            nn.Linear(text_dim, hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, vision_dim),
-            nn.Sigmoid()
-        )
-
-        self.channel_mlp.apply(weights_init_kaiming)
-
-        self.refine_fc = nn.Sequential(
-            nn.Linear(vision_dim, vision_dim),
-            nn.GELU()
-        )
-        self.refine_fc.apply(weights_init_kaiming)
-
         self.out_norm = nn.LayerNorm(vision_dim)
 
     def forward(self, image_feat, text_feat):
@@ -249,15 +232,6 @@ class TVF(nn.Module):
         context = self.out_proj(context)
 
         fused = visual_tokens + self.gamma * context
-
-        # Channel modulation
-        channel_gate = self.channel_mlp(text_global)
-        channel_gate = channel_gate.unsqueeze(1)
-
-        fused = fused * channel_gate
-
-        # Refinement
-        fused = fused + self.refine_fc(fused)
 
         if self.image_token_type == 'patch':
             out = torch.cat([cls_token, fused], dim=1)
