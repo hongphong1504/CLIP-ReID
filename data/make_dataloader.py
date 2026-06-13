@@ -12,6 +12,7 @@ import torch.distributed as dist
 from .agreid import AG_ReID, AG_ReID_G2A
 from .agreidv2 import AG_ReID_v2, AG_ReID_v2_G2A, AG_ReID_v2_A2W, AG_ReID_v2_W2A
 from .cargo import CARGO, CARGO_AA, CARGO_GG, CARGO_AG, CARGO_GA
+from .lagper import LAGPeR, LAGPeR_A2G, LAGPeR_G2A, LAGPeR_G2AG
 
 __factory = {
     'agreid': AG_ReID,
@@ -27,6 +28,11 @@ __factory = {
     'cargo_gg': CARGO_GG,
     'cargo_ag': CARGO_AG,  
     'cargo_ga': CARGO_GA, 
+
+    'lagper': LAGPeR,
+    'lagper_a2g': LAGPeR_A2G,
+    'lagper_g2a': LAGPeR_G2A,
+    'lagper_g2ag': LAGPeR_G2AG,
 }
 
 def train_collate_fn(batch):

@@ -9,7 +9,7 @@ MODEL:
   TRIPLET_LOSS_WEIGHT : 1.0
   
   # SIE Embeddings
-  SIE_CAMERA: True 
+  SIE_CAMERA: False
   SIE_VIEW: True 
   SIE_COE : 1.0 
   
@@ -55,8 +55,7 @@ TEST:
   FEAT_NORM: 'yes'
 
 DATASETS:
-  NAMES: ('agreidv2')
-  TESTS: ('agreidv2', 'agreidv2_g2a', 'agreidv2_a2w', 'agreidv2_w2a')
+  NAMES: ('lagper')
+  TESTS: ('lagper_a2g', 'lagper_g2a', 'lagper_g2ag')
   ROOT_DIR: ('/datastore/vit/Phong/CLIP-ReID/datasets')
-OUTPUT_DIR: logs/agreidv2/vit_base
-
+OUTPUT_DIR: logs/lagper/vit_base

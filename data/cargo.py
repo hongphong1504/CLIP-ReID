@@ -24,7 +24,14 @@ class CARGO(BaseImageDataset):
         self.query_dir = osp.join(self.data_dir, 'query')
         self.gallery_dir = osp.join(self.data_dir, 'gallery')
 
-        self._check_before_run()
+        required_files = [
+            self.data_dir,
+            self.train_dir,
+            self.query_dir,
+            self.gallery_dir
+        ]
+
+        self.check_before_run(required_files)
         self.pid_begin = pid_begin
 
         train = self.process_dir(self.train_dir, relabel=True)
@@ -38,17 +45,6 @@ class CARGO(BaseImageDataset):
         self.num_train_pids, self.num_train_imgs, self.num_train_cams, self.num_train_vids = self.get_imagedata_info(self.train)
         self.num_query_pids, self.num_query_imgs, self.num_query_cams, self.num_query_vids = self.get_imagedata_info(self.query)
         self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams, self.num_gallery_vids = self.get_imagedata_info(self.gallery)
-
-    def _check_before_run(self):
-        """Check if all files are available before going deeper"""
-        if not osp.exists(self.data_dir):
-            raise RuntimeError("'{}' is not available".format(self.data_dir))
-        if not osp.exists(self.train_dir):
-            raise RuntimeError("'{}' is not available".format(self.train_dir))
-        if not osp.exists(self.query_dir):
-            raise RuntimeError("'{}' is not available".format(self.query_dir))
-        if not osp.exists(self.gallery_dir):
-            raise RuntimeError("'{}' is not available".format(self.gallery_dir))
 
     def process_dir(self, dir_path, relabel=False):
         img_paths = []
@@ -91,7 +87,14 @@ class CARGO_AA(BaseImageDataset):
         self.query_dir = osp.join(self.data_dir, 'query')
         self.gallery_dir = osp.join(self.data_dir, 'gallery')
 
-        self._check_before_run()
+        required_files = [
+            self.data_dir,
+            self.train_dir,
+            self.query_dir,
+            self.gallery_dir
+        ]
+
+        self.check_before_run(required_files)
         self.pid_begin = pid_begin
 
         train = self.process_dir(self.train_dir, relabel=True)
@@ -105,17 +108,7 @@ class CARGO_AA(BaseImageDataset):
         self.num_train_pids, self.num_train_imgs, self.num_train_cams, self.num_train_vids = self.get_imagedata_info(self.train)
         self.num_query_pids, self.num_query_imgs, self.num_query_cams, self.num_query_vids = self.get_imagedata_info(self.query)
         self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams, self.num_gallery_vids = self.get_imagedata_info(self.gallery)
-
-    def _check_before_run(self):
-        """Check if all files are available before going deeper"""
-        if not osp.exists(self.data_dir):
-            raise RuntimeError("'{}' is not available".format(self.data_dir))
-        if not osp.exists(self.train_dir):
-            raise RuntimeError("'{}' is not available".format(self.train_dir))
-        if not osp.exists(self.query_dir):
-            raise RuntimeError("'{}' is not available".format(self.query_dir))
-        if not osp.exists(self.gallery_dir):
-            raise RuntimeError("'{}' is not available".format(self.gallery_dir))
+        
 
     def process_dir(self, dir_path, relabel=False):
         img_paths = []
@@ -162,7 +155,13 @@ class CARGO_GG(BaseImageDataset):
         self.query_dir = osp.join(self.data_dir, 'query')
         self.gallery_dir = osp.join(self.data_dir, 'gallery')
 
-        self._check_before_run()
+        required_files = [
+            self.data_dir,
+            self.train_dir,
+            self.query_dir,
+            self.gallery_dir
+        ]
+        self.check_before_run(required_files)
         self.pid_begin = pid_begin
 
         train = self.process_dir(self.train_dir, relabel=True)
@@ -177,16 +176,6 @@ class CARGO_GG(BaseImageDataset):
         self.num_query_pids, self.num_query_imgs, self.num_query_cams, self.num_query_vids = self.get_imagedata_info(self.query)
         self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams, self.num_gallery_vids = self.get_imagedata_info(self.gallery)
 
-    def _check_before_run(self):
-        """Check if all files are available before going deeper"""
-        if not osp.exists(self.data_dir):
-            raise RuntimeError("'{}' is not available".format(self.data_dir))
-        if not osp.exists(self.train_dir):
-            raise RuntimeError("'{}' is not available".format(self.train_dir))
-        if not osp.exists(self.query_dir):
-            raise RuntimeError("'{}' is not available".format(self.query_dir))
-        if not osp.exists(self.gallery_dir):
-            raise RuntimeError("'{}' is not available".format(self.gallery_dir))
 
     def process_dir(self, dir_path, relabel=False):
         img_paths = []
@@ -233,7 +222,13 @@ class CARGO_AG(BaseImageDataset):
         self.query_dir = osp.join(self.data_dir, 'query')
         self.gallery_dir = osp.join(self.data_dir, 'gallery')
 
-        self._check_before_run()
+        required_files = [
+            self.data_dir,
+            self.train_dir,
+            self.query_dir,
+            self.gallery_dir
+        ]
+        self.check_before_run(required_files)
         self.pid_begin = pid_begin
 
         train = self.process_dir(self.train_dir, relabel=True)
@@ -247,17 +242,7 @@ class CARGO_AG(BaseImageDataset):
         self.num_train_pids, self.num_train_imgs, self.num_train_cams, self.num_train_vids = self.get_imagedata_info(self.train)
         self.num_query_pids, self.num_query_imgs, self.num_query_cams, self.num_query_vids = self.get_imagedata_info(self.query)
         self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams, self.num_gallery_vids = self.get_imagedata_info(self.gallery)
-
-    def _check_before_run(self):
-        """Check if all files are available before going deeper"""
-        if not osp.exists(self.data_dir):
-            raise RuntimeError("'{}' is not available".format(self.data_dir))
-        if not osp.exists(self.train_dir):
-            raise RuntimeError("'{}' is not available".format(self.train_dir))
-        if not osp.exists(self.query_dir):
-            raise RuntimeError("'{}' is not available".format(self.query_dir))
-        if not osp.exists(self.gallery_dir):
-            raise RuntimeError("'{}' is not available".format(self.gallery_dir))
+        
 
     def process_dir(self, dir_path, relabel=False, view='all'):
         img_paths = []
@@ -309,7 +294,13 @@ class CARGO_GA(BaseImageDataset):
         self.query_dir = osp.join(self.data_dir, 'query')
         self.gallery_dir = osp.join(self.data_dir, 'gallery')
 
-        self._check_before_run()
+        required_files = [
+            self.data_dir,
+            self.train_dir,
+            self.query_dir,
+            self.gallery_dir
+        ]
+        self.check_before_run(required_files)
         self.pid_begin = pid_begin
 
         train = self.process_dir(self.train_dir, relabel=True)
@@ -324,16 +315,6 @@ class CARGO_GA(BaseImageDataset):
         self.num_query_pids, self.num_query_imgs, self.num_query_cams, self.num_query_vids = self.get_imagedata_info(self.query)
         self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams, self.num_gallery_vids = self.get_imagedata_info(self.gallery)
 
-    def _check_before_run(self):
-        """Check if all files are available before going deeper"""
-        if not osp.exists(self.data_dir):
-            raise RuntimeError("'{}' is not available".format(self.data_dir))
-        if not osp.exists(self.train_dir):
-            raise RuntimeError("'{}' is not available".format(self.train_dir))
-        if not osp.exists(self.query_dir):
-            raise RuntimeError("'{}' is not available".format(self.query_dir))
-        if not osp.exists(self.gallery_dir):
-            raise RuntimeError("'{}' is not available".format(self.gallery_dir))
 
     def process_dir(self, dir_path, relabel=False, view='all'):
         img_paths = []

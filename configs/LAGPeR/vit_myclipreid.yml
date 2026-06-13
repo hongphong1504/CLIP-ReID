@@ -4,15 +4,22 @@ MODEL:
   IF_LABELSMOOTH: 'on'
   IF_WITH_CENTER: 'no'
   NAME: 'ViT-B-16'
-  STRIDE_SIZE: [12, 12]
-  ID_LOSS_WEIGHT : 1.0
+  STRIDE_SIZE: [12, 12] # OLP
+
+  ID_LOSS_WEIGHT : 0.25
   TRIPLET_LOSS_WEIGHT : 1.0
-  
+
   # SIE Embeddings
-  SIE_CAMERA: True 
+  SIE_CAMERA: False
   SIE_VIEW: True 
   SIE_COE : 1.0 
-  
+
+  # Fusion Settings
+  FUSION_TYPE: 'TVF' # SFM | TVF 
+  FUSION_IMAGE_TOKENS: "patch" # patch | all
+  FUSION_TEXT_TOKENS: "all" # eot | all
+
+
 INPUT:
   SIZE_TRAIN: [256, 128]
   SIZE_TEST: [256, 128]
@@ -27,7 +34,7 @@ DATALOADER:
   NUM_INSTANCE: 4
   NUM_WORKERS: 8
 
-SOLVER:
+SOLVER:  
   IMS_PER_BATCH: 64
   OPTIMIZER_NAME: "Adam"
   BASE_LR: 0.000005
@@ -49,14 +56,17 @@ SOLVER:
 TEST:
   EVAL: True
   IMS_PER_BATCH: 256
-  METHOD: 'baseline' # baseline | rerank
+  METHOD: 'baseline' # baseline | rerank | uffm | uffm_amc
+  UFFM_K: 5
+  AMC_N_TRIPLETS: 1000
   WEIGHT: ''
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
+  CONCAT_PENULT_FEAT: True
 
 DATASETS:
-  NAMES: ('agreidv2')
-  TESTS: ('agreidv2', 'agreidv2_g2a', 'agreidv2_a2w', 'agreidv2_w2a')
+  NAMES: ('lagper')
+  TESTS: ('lagper_a2g', 'lagper_g2a', 'lagper_g2ag')
   ROOT_DIR: ('/datastore/vit/Phong/CLIP-ReID/datasets')
-OUTPUT_DIR: logs/agreidv2/vit_base
-
+  CAPTION_PATH: ('/datastore/vit/Phong/CLIP-ReID/datasets/captions/LAGPeR_captions.json')
+OUTPUT_DIR: logs/lagper/my-clipreid

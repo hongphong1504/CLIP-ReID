@@ -1,5 +1,6 @@
 from PIL import Image, ImageFile
 import json
+import warnings
 from torch.utils.data import Dataset
 import os.path as osp
 import random
@@ -67,6 +68,19 @@ class BaseImageDataset(BaseDataset):
         print("  query    | {:5d} | {:8d} | {:9d}".format(num_query_pids, num_query_imgs, num_query_cams))
         print("  gallery  | {:5d} | {:8d} | {:9d}".format(num_gallery_pids, num_gallery_imgs, num_gallery_cams))
         print("  ----------------------------------------")
+    
+    
+    def check_before_run(self, required_files):
+        """Checks if required files exist before going deeper.
+        Args:
+            required_files (str or list): string file name(s).
+        """
+        if isinstance(required_files, str):
+            required_files = [required_files]
+
+        for fpath in required_files:
+            if not osp.exists(fpath):
+                raise RuntimeError('"{}" is not found'.format(fpath))
 
 
 class ImageDataset(Dataset):
@@ -74,7 +88,11 @@ class ImageDataset(Dataset):
         self.dataset = dataset
         self.transform = transform
 
+        if caption_path is not None and not osp.exists(caption_path):
+            raise ValueError("Caption path is invalid")
+
         if caption_path is None:
+            warnings.warn("If you train or test the CapCLIP-AGReID, you must provide the capion_path.")
             self.caption_dict = {}
             return
 

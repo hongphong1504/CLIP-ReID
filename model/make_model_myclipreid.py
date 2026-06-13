@@ -213,11 +213,9 @@ class TVF(nn.Module):
         if self.text_token_type == 'eot':
             K_text = text_feat.unsqueeze(1)
             V_text = text_feat.unsqueeze(1)
-            text_global = text_feat
         else:
             K_text = text_feat
             V_text = text_feat
-            text_global = text_feat.mean(dim=1)
 
         Q = self.q_proj(visual_tokens)
         K = self.k_proj(K_text)
