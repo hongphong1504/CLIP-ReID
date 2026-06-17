@@ -19,6 +19,13 @@ MODEL:
   FUSION_IMAGE_TOKENS: "patch" # patch | all
   FUSION_TEXT_TOKENS: "all" # eot | all
 
+  # frozen | adapter | full
+  TEXT_ENCODER_TRAIN_MODE: "frozen"
+  # Used only when TEXT_ENCODER_TRAIN_MODE is "adapter"
+  TEXT_ADAPTER_DIM: 64
+  TEXT_ADAPTER_LAYERS: 4
+  TEXT_ADAPTER_DROPOUT: 0.0
+
 
 INPUT:
   SIZE_TRAIN: [256, 128]
@@ -38,6 +45,8 @@ SOLVER:
   IMS_PER_BATCH: 64
   OPTIMIZER_NAME: "Adam"
   BASE_LR: 0.000005
+  TEXT_ENCODER_LR: 0.000001
+  TEXT_ADAPTER_LR: 0.0001
   WARMUP_METHOD: 'linear'
   WARMUP_ITERS: 10
   WARMUP_FACTOR: 0.1
@@ -67,6 +76,6 @@ TEST:
 DATASETS:
   NAMES: ('lagper')
   TESTS: ('lagper_a2g', 'lagper_g2a', 'lagper_g2ag')
-  ROOT_DIR: ('/datastore/vit/Phong/CLIP-ReID/datasets')
-  CAPTION_PATH: ('/datastore/vit/Phong/CLIP-ReID/datasets/captions/LAGPeR_captions.json')
+  ROOT_DIR: ('datasets')
+  CAPTION_PATH: ('datasets/captions/LAGPeR_captions.json')
 OUTPUT_DIR: logs/lagper/my-clipreid

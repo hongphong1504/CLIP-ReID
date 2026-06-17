@@ -4,15 +4,22 @@ def make_optimizer(cfg, model, center_criterion):
     params = []
     keys = []
     for key, value in model.named_parameters():
-        if "text_encoder" in key:
-            value.requires_grad_(False)
-            continue   
         if not value.requires_grad:
             continue
+
+        is_text_adapter = key.startswith("text_encoder.adapters.")
+        is_text_encoder = key.startswith("text_encoder.")
+
         lr = cfg.SOLVER.BASE_LR
         weight_decay = cfg.SOLVER.WEIGHT_DECAY
+        if is_text_adapter:
+            lr = cfg.SOLVER.TEXT_ADAPTER_LR
+        elif is_text_encoder:
+            lr = cfg.SOLVER.TEXT_ENCODER_LR
+
         if "bias" in key:
-            lr = cfg.SOLVER.BASE_LR * cfg.SOLVER.BIAS_LR_FACTOR
+            if not is_text_encoder:
+                lr = lr * cfg.SOLVER.BIAS_LR_FACTOR
             weight_decay = cfg.SOLVER.WEIGHT_DECAY_BIAS
         if cfg.SOLVER.LARGE_FC_LR:
             if "classifier" in key or "arcface" in key:

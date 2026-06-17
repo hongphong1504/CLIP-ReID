@@ -57,5 +57,5 @@ TEST:
 DATASETS:
   NAMES: ('lagper')
   TESTS: ('lagper_a2g', 'lagper_g2a', 'lagper_g2ag')
-  ROOT_DIR: ('/datastore/vit/Phong/CLIP-ReID/datasets')
+  ROOT_DIR: ('datasets')
 OUTPUT_DIR: logs/lagper/vit_base

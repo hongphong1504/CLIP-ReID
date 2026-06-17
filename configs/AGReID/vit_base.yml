@@ -57,5 +57,5 @@ TEST:
 DATASETS:
   NAMES: ('agreid')
   TESTS: ('agreid', 'agreid_g2a')
-  ROOT_DIR: ('/datastore/vit/Phong/CLIP-ReID/datasets')
+  ROOT_DIR: ('datasets')
 OUTPUT_DIR: logs/agreid/vit_base

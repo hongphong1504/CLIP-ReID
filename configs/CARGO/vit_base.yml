@@ -57,5 +57,5 @@ TEST:
 DATASETS:
   NAMES: ('cargo')
   TESTS: ('cargo', 'cargo_aa', 'cargo_gg', 'cargo_ag', 'cargo_ga')
-  ROOT_DIR: ('/datastore/vit/Phong/CLIP-ReID/datasets')
+  ROOT_DIR: ('datasets')
 OUTPUT_DIR: logs/cargo/vit_base

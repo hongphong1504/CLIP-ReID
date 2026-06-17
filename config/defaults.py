@@ -62,12 +62,20 @@ _C.MODEL.SIE_CAMERA = False
 _C.MODEL.SIE_VIEW = False
 
 # Fusion setting
-_C.MODEL.FUSION_TYPE = 'SFM' # SFM | TVF 
+_C.MODEL.FUSION_TYPE = 'TVF' # SFM | TVF 
 
 # SFM setting
 _C.MODEL.FUSION_IMAGE_TOKENS = "patch" # patch | all
-_C.MODEL.FUSION_TEXT_TOKENS = "eot" # eot | all
+_C.MODEL.FUSION_TEXT_TOKENS = "all" # eot | all
 
+
+# Text encoder fine-tuning
+# Options: "frozen", "adapter", "full"
+_C.MODEL.TEXT_ENCODER_TRAIN_MODE = "frozen"
+# Adapter is inserted after the last N text Transformer blocks.
+_C.MODEL.TEXT_ADAPTER_DIM = 64
+_C.MODEL.TEXT_ADAPTER_LAYERS = 4
+_C.MODEL.TEXT_ADAPTER_DROPOUT = 0.0
 # -----------------------------------------------------------------------------
 # INPUT
 # -----------------------------------------------------------------------------
@@ -122,9 +130,12 @@ _C.SOLVER.IMS_PER_BATCH = 64
 # Name of optimizer
 _C.SOLVER.OPTIMIZER_NAME = "Adam"
 # Number of max epoches
-_C.SOLVER.MAX_EPOCHS = 100
+_C.SOLVER.MAX_EPOCHS = 60
 # Base learning rate
 _C.SOLVER.BASE_LR = 3e-4
+# Separate learning rates for text-encoder parameter groups
+_C.SOLVER.TEXT_ENCODER_LR = 1e-6
+_C.SOLVER.TEXT_ADAPTER_LR = 1e-4
 # Whether using larger learning rate for fc layer
 _C.SOLVER.LARGE_FC_LR = False
 # Factor of learning bias

@@ -68,6 +68,19 @@ if __name__ == '__main__':
 
     logger.info("model: {}".format(model))
 
+    trainable_params = sum(
+        parameter.numel()
+        for parameter in model.parameters()
+        if parameter.requires_grad
+    )
+    trainable_text_params = sum(
+        parameter.numel()
+        for name, parameter in model.named_parameters()
+        if name.startswith("text_encoder.") and parameter.requires_grad
+    )
+    logger.info(f"Trainable parameters: {trainable_params:,}")
+    logger.info(f"Trainable text parameters: {trainable_text_params:,}")
+
     loss_func, center_criterion = make_loss(cfg, num_classes=num_classes)
 
     optimizer, optimizer_center = make_optimizer(cfg, model, center_criterion)

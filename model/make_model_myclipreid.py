@@ -29,9 +29,38 @@ def weights_init_classifier(m):
         if m.bias:
             nn.init.constant_(m.bias, 0.0)
 
+class TextAdapter(nn.Module):
+    """Residual bottleneck adapter for CLIP text tokens."""
+    
+    def __init__(self, hidden_dim, bottleneck_dim, dropout=0.0):
+        super().__init__()
+        self.norm = nn.LayerNorm(hidden_dim)
+        self.down_proj = nn.Linear(hidden_dim, bottleneck_dim)
+        self.activation = nn.GELU()
+        self.dropout = nn.Dropout(dropout)
+        self.up_proj = nn.Linear(bottleneck_dim, hidden_dim)
+
+        # Start from the original pretrained text representation.
+        nn.init.normal_(self.down_proj.weight, std=0.02)
+        nn.init.zeros_(self.down_proj.bias)
+        nn.init.zeros_(self.up_proj.weight)
+        nn.init.zeros_(self.up_proj.bias)
+
+    def forward(self, x):
+        residual = self.up_proj(
+            self.dropout(
+                self.activation(
+                    self.down_proj(self.norm(x))
+                )
+            )
+        )
+        return x + residual
+
 
 class TextEncoder(nn.Module):
-    def __init__(self, clip_model):
+    VALID_TRAIN_MODES = {"frozen", "adapter", "full"}
+
+    def __init__(self, clip_model, cfg):
         super().__init__()
         self.token_embedding = clip_model.token_embedding
         self.positional_embedding = clip_model.positional_embedding
@@ -40,12 +69,74 @@ class TextEncoder(nn.Module):
         self.text_projection = clip_model.text_projection
         self.dtype = clip_model.dtype
 
+        self.train_mode = cfg.MODEL.TEXT_ENCODER_TRAIN_MODE.lower()
+        if self.train_mode not in self.VALID_TRAIN_MODES:
+            raise ValueError(
+                "MODEL.TEXT_ENCODER_TRAIN_MODE must be one of "
+                f"{sorted(self.VALID_TRAIN_MODES)}, got "
+                f"'{cfg.MODEL.TEXT_ENCODER_TRAIN_MODE}'."
+            )
+
+        self.adapters = nn.ModuleDict()
+        if self.train_mode == "adapter":
+            num_blocks = len(self.transformer.resblocks)
+            num_adapter_layers = cfg.MODEL.TEXT_ADAPTER_LAYERS
+            if not 1 <= num_adapter_layers <= num_blocks:
+                raise ValueError(
+                    "MODEL.TEXT_ADAPTER_LAYERS must be in "
+                    f"[1, {num_blocks}], got {num_adapter_layers}."
+                )
+
+            hidden_dim = self.ln_final.weight.shape[0]
+            first_adapter_block = num_blocks - num_adapter_layers
+            for block_idx in range(first_adapter_block, num_blocks):
+                self.adapters[str(block_idx)] = TextAdapter(
+                    hidden_dim=hidden_dim,
+                    bottleneck_dim=cfg.MODEL.TEXT_ADAPTER_DIM,
+                    dropout=cfg.MODEL.TEXT_ADAPTER_DROPOUT,
+                )
+
+        self._configure_trainable_parameters()
+
+    def _configure_trainable_parameters(self):
+        # Trainability belongs to the model definition, not the optimizer.
+        for parameter in self.parameters():
+            parameter.requires_grad_(False)
+
+        if self.train_mode == "adapter":
+            for parameter in self.adapters.parameters():
+                parameter.requires_grad_(True)
+        elif self.train_mode == "full":
+            for parameter in self.parameters():
+                parameter.requires_grad_(True)
+
+    def train(self, mode=True):
+        super().train(mode)
+
+        # Keep the pretrained backbone deterministic when it is frozen.
+        if self.train_mode in {"frozen", "adapter"}:
+            self.token_embedding.eval()
+            self.transformer.eval()
+            self.ln_final.eval()
+            self.adapters.train(mode)
+
+        return self
+
     def forward(self, text): 
         x = self.token_embedding(text).type(self.dtype)
         x = x + self.positional_embedding.type(self.dtype)
 
         x = x.permute(1, 0, 2)  # NLD -> LND 
-        x = self.transformer(x)     
+
+        if self.train_mode == "adapter":
+            for block_idx, block in enumerate(self.transformer.resblocks):
+                x = block(x)
+                adapter_key = str(block_idx)
+                if adapter_key in self.adapters:
+                    x = self.adapters[adapter_key](x)
+        else:
+            x = self.transformer(x)
+
         x = x.permute(1, 0, 2)  # LND -> NLD
 
         x = self.ln_final(x).type(self.dtype) 
@@ -325,7 +416,7 @@ class build_transformer(nn.Module):
         clip_model.to("cuda")
 
         self.image_encoder = ImageEncoder(clip_model.visual, cfg)
-        self.text_encoder = TextEncoder(clip_model)
+        self.text_encoder = TextEncoder(clip_model, cfg)
 
         if cfg.MODEL.SIE_CAMERA and cfg.MODEL.SIE_VIEW:
             self.cv_embed = nn.Parameter(torch.zeros(camera_num * view_num, self.in_planes))
@@ -344,8 +435,11 @@ class build_transformer(nn.Module):
             print('using SIE_Lambda is : {}'.format(self.sie_coe))
             
     def forward(self, image = None, caption=None, cam_label= None, view_label=None):
-        with torch.no_grad():
-            text_tokens, eot_feat, text_proj = self.text_encoder(caption)
+        if self.text_encoder.train_mode == "frozen":
+            with torch.no_grad():
+                text_tokens, eot_feat, text_proj = self.text_encoder(caption)
+        else:
+             text_tokens, eot_feat, text_proj = self.text_encoder(caption)
 
         cv_embed = None
         if cam_label != None and view_label != None:
