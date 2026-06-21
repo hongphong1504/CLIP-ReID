@@ -285,7 +285,7 @@ class TVF(nn.Module):
 
         self.out_norm = nn.LayerNorm(vision_dim)
 
-    def forward(self, image_feat, text_feat):
+    def forward(self, image_feat, text_feat, text_mask=None):
         """
         image_feat : (B,Nv,Dv)
         text_feat: (B, Dt) if text_token_type is 'eot', else (B, Nt, Dt)
@@ -313,14 +313,21 @@ class TVF(nn.Module):
         V = self.v_proj(V_text)
 
         # Cross-attion
-        attn = torch.matmul(Q, K.transpose(-1, -2))
-        attn = attn / math.sqrt(Q.shape[-1])
-        attn = torch.softmax(attn, dim=-1)
+        logits = torch.matmul(Q, K.transpose(-1, -2)) / math.sqrt(Q.shape[-1])
+
+        if text_mask is not None:
+            logits = logits.masked_fill(
+                ~text_mask[:, None, :],
+                torch.finfo(logits.dtype).min,
+            )
+
+        attn = torch.softmax(logits, dim=-1)
 
         context = torch.matmul(attn, V)
         context = self.out_proj(context)
 
-        fused = visual_tokens + self.gamma * context
+        residual = self.gamma * context
+        fused = visual_tokens + residual
 
         if self.image_token_type == 'patch':
             out = torch.cat([cls_token, fused], dim=1)
@@ -351,7 +358,7 @@ class ImageEncoder(nn.Module):
                 text_token_type=cfg.MODEL.FUSION_TEXT_TOKENS
             )
 
-    def forward(self, image, text, cv_emb=None):
+    def forward(self, image, text, text_mask, cv_emb=None):
         x = self.visual.conv1(image) 
         x = x.reshape(x.shape[0], x.shape[1], -1)
         x = x.permute(0, 2, 1)
@@ -368,7 +375,7 @@ class ImageEncoder(nn.Module):
         x11 = self.visual.transformer.resblocks[:11](x)
 
         x11 = x11.permute(1, 0, 2)
-        x11 = self.fusion(x11, text)
+        x11 = self.fusion(x11, text, text_mask=text_mask)
         x11 = x11.permute(1, 0, 2)
 
         x12 = self.visual.transformer.resblocks[11](x11) 
@@ -380,6 +387,24 @@ class ImageEncoder(nn.Module):
 
         return x11, x12 
         
+def build_clip_text_mask(token_ids):
+    """
+    token_ids: (B, L)
+
+    CLIP EOT token has the largest token ID,
+    matching the existing argmax logic.
+    """
+    batch_size, seq_len = token_ids.shape
+
+    eot_pos = token_ids.argmax(dim=-1)
+
+    positions = torch.arange(
+        seq_len,
+        device=token_ids.device,
+    ).unsqueeze(0)
+
+    # Keep SOS, content tokens, and EOT.
+    return positions <= eot_pos.unsqueeze(1)
 
 class build_transformer(nn.Module):
     def __init__(self, num_classes, camera_num, view_num, cfg):
@@ -434,7 +459,7 @@ class build_transformer(nn.Module):
             print('viewpoint number is : {}'.format(view_num))
             print('using SIE_Lambda is : {}'.format(self.sie_coe))
             
-    def forward(self, image = None, caption=None, cam_label= None, view_label=None):
+    def forward(self, image=None, caption=None, cam_label= None, view_label=None):
         if self.text_encoder.train_mode == "frozen":
             with torch.no_grad():
                 text_tokens, eot_feat, text_proj = self.text_encoder(caption)
@@ -451,10 +476,12 @@ class build_transformer(nn.Module):
 
         if self.fusion_text_tokens == 'eot':
             text_input = eot_feat
+            text_mask = None
         else:
             text_input = text_tokens
-
-        penult_imfeat, imfeat = self.image_encoder(image=image, text=text_input, cv_emb=cv_embed) 
+            text_mask = build_clip_text_mask(caption)
+ 
+        penult_imfeat, imfeat = self.image_encoder(image=image, text=text_input, text_mask=text_mask, cv_emb=cv_embed) 
         penult_imfeat = penult_imfeat[:,0]
         imfeat = imfeat[:,0]
 
@@ -464,10 +491,10 @@ class build_transformer(nn.Module):
             cls_score = self.classifier(feat)
             return [cls_score], [penult_imfeat, imfeat]
         else:
-            out_feat = imfeat if self.neck_feat == 'before' else feat
-            if self.concat_penult_feat:
-                out_feat = torch.cat([out_feat, penult_imfeat], dim=1)
-            return out_feat
+            if self.neck_feat == 'after':
+                return torch.cat([feat, penult_imfeat], dim=1)
+            else:
+                return torch.cat([imfeat, penult_imfeat], dim=1)
 
     def load_param(self, trained_path):
         param_dict = torch.load(trained_path)
